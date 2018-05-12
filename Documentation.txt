@@ -1,0 +1,89 @@
+About
+-----
+
+In its current form this is an HTTP live-streaming server. A media resource can
+be streamed to a number of clients in real-time. The server interally reads the
+input in real-time, like a media-player. It keeps a short cirular buffer to be
+able to send clients data to fill their own buffers. This is to prevent media
+players from stuttering because not enough data is available. Clients that
+connect are sent this buffer and any further data read from the file. This
+means that clients that connect later than the server was, "join" whereever
+the server is currently reading (including the short buffer).
+The stream received by the clients is simply an HTTP response to an HTTP
+request.
+
+
+Documentation
+-------------
+
+The current implementation has three different types of work that is done in
+different threads. These types are: reading a stream, accepting HTTP
+connections and writing media data to clients.
+
+The design tries to follow a Publisher-Subscriber-Pattern. The PublisherContext
+struct contains buffers of read media data and the list of clients. Clients
+themselves contain a buffer of media data that still has to be sent to them.
+
+The reading thread takes care of segmenting the stream into independent chunks
+of data and pushing it to the PublisherContext, which publishes the new Segment
+to connected clients. This publishing only adds this Segment to the client's
+buffer.
+
+The writing thread does the actual writing of data over the network. It checks
+each client's state and if there is data available that can be written to that
+client it is sent.
+
+The accept thread accepts new clients over HTTP and if not all client slots are
+in use, writes the stream-header and adds the client to the PublisherContext.
+
+A Segment is only stored in memory once and is refcounted. Buffers in the
+PublisherContext and clients contain pointers to Segments.
+
+Buffers are implemented using AVFifoBuffer.
+
+Client states are protected by pthread-mutex-locks, making it possible to run
+multiple write threads.
+
+HTTPD-API
+---------
+
+To be independent of a specific http server implementation, an interface is
+provided that an http server implementation has to provide. At the time of
+writing an implementation using the libavformat http server is provided.
+
+The HTTPDInterface struct takes the following function pointers:
+
+struct HTTPDInterface {
+    int (*init)  (void **server, struct HTTPDConfig config);
+    int (*free)  (void *server);
+    int (*accept)(void *server, struct HTTPClient **client, int reply_code);
+    int (*write) (void *server, struct HTTPClient *client, const unsigned char *buf, int size);
+    int (*read)  (void *server, struct HTTPClient *client, unsigned char *buf, int size);
+    void (*close)(void *server, struct HTTPClient *client);
+    void (*shutdown)(void *server);
+};
+
+
+Usage
+-----
+
+Currently streams can be supplied as a stream through stdin or any ffmpeg-
+compatible URI, e.g. files or network locations. Examples:
+
+cat somefile.mkv | ./ffserver
+
+./ffserver somefile.mkv
+
+./ffserver http://somehost/somefile.mkv
+
+This will start reading the file and open port 8080 for HTTP client connections.
+The stream is read in real time from whatever resource it is retrieved.
+Currently a maximum of 16 clients is implemented.
+
+The server responds to any GET request with the mediastream. Any other request
+is answered with a HTTP 400 error.
+If the maximum number of clients is reached the server responds with a 503 HTTP
+error if a new client wants to connect.
+
+Once the stream ends the server will write all the remaining data to all
+connected clients before closing the connections and exiting.
