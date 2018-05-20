@@ -505,8 +505,8 @@ void *run_server(void *arg) {
     pthread_t *r_threads;
     pthread_t **w_threads_p;
     
-    pubs = av_mallocz(config->nb_streams * sizeof(struct PublisherContext*));
-    ifmt_ctxs = av_mallocz(config->nb_streams * sizeof(AVFormatContext*));
+    pubs = av_mallocz_array(config->nb_streams, sizeof(struct PublisherContext*));
+    ifmt_ctxs = av_mallocz_array(config->nb_streams, sizeof(AVFormatContext*));
     
     av_log_set_level(AV_LOG_INFO);
     
@@ -516,10 +516,10 @@ void *run_server(void *arg) {
     ainfo.httpd = &lavfhttpd;
     ainfo.config = config;
     
-    rinfos = av_mallocz(config->nb_streams * sizeof(struct ReadInfo));
-    winfos_p = av_mallocz(config->nb_streams * sizeof(struct WriteInfo*));
-    r_threads = av_mallocz(config->nb_streams * sizeof(pthread_t));
-    w_threads_p = av_mallocz(config->nb_streams * sizeof(pthread_t*));
+    rinfos = av_mallocz_array(config->nb_streams, sizeof(struct ReadInfo));
+    winfos_p = av_mallocz_array(config->nb_streams, sizeof(struct WriteInfo*));
+    r_threads = av_mallocz_array(config->nb_streams, sizeof(pthread_t));
+    w_threads_p = av_mallocz_array(config->nb_streams, sizeof(pthread_t*));
     
     for (stream_index = 0; stream_index < config->nb_streams; stream_index++) {
         struct PublisherContext *pub = NULL;
@@ -545,8 +545,8 @@ void *run_server(void *arg) {
 
         rinfos[stream_index] = rinfo;
 
-        w_threads = av_malloc(sizeof(pthread_t) * pub->nb_threads);
-        winfos = av_malloc(sizeof(struct WriteInfo) * pub->nb_threads);
+        w_threads = av_mallocz_array(pub->nb_threads, sizeof(pthread_t));
+        winfos = av_mallocz_array(pub->nb_threads, sizeof(struct WriteInfo));
 
         w_threads_p[stream_index] = w_threads;
         winfos_p[stream_index] = winfos;
@@ -604,7 +604,7 @@ int main(int argc, char *argv[])
         printf("No valid configurations parsed.\n");
         return 1;
     }
-    server_threads = av_malloc(nb_configs * sizeof(pthread_t));
+    server_threads = av_mallocz_array(nb_configs, sizeof(pthread_t));
     for (i = 0; i < nb_configs; i++) {
         config_dump(configs + i);
         pthread_create(&server_threads[i], NULL, run_server, configs + i);
