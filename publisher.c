@@ -93,11 +93,12 @@ void client_push_segment(struct Client *c, struct Segment *seg)
     client_set_state(c, WRITABLE);
 }
 
-void publisher_init(struct PublisherContext **pub)
+void publisher_init(struct PublisherContext **pub, char *stream_name)
 {
     int i;
     struct PublisherContext *pc = (struct PublisherContext*) av_malloc(sizeof(struct PublisherContext));
     pc->nb_threads = 8;
+    pc->stream_name = stream_name;
     pc->current_segment_id = -1;
     pc->shutdown = 0;
     pc->buffer = av_fifo_alloc_array(sizeof(struct Segment), MAX_SEGMENTS);

@@ -73,6 +73,7 @@ struct PublisherContext {
     int nb_threads;
     int current_segment_id;
     int shutdown; // indicate shutdown, gracefully close client connections and files and exit
+    char *stream_name;
 };
 
 /**
@@ -101,8 +102,9 @@ void client_set_state(struct Client *c, enum State state);
  * Allocate and initialize a PublisherContext
  *
  * @param pub pointer to a pointer to a PublisherContext. It will be allocated and initialized.
+ * @param stream_name string containing the name of the stream.
  */
-void publisher_init(struct PublisherContext **pub);
+void publisher_init(struct PublisherContext **pub, char *stream_name);
 
 /**
  * Push a Segment to a PublisherContext.
