@@ -45,7 +45,7 @@
 struct ReadInfo {
     struct PublisherContext *pub;
     AVFormatContext *ifmt_ctx;
-    char *in_filename;
+    char *input_uri;
 };
 
 struct WriteInfo {
