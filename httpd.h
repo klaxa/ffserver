@@ -26,11 +26,28 @@
 
 #include "publisher.h"
 
+/* Supported stream formats, for now only matroska */
+enum StreamFormat {
+    FMT_MATROSKA = 0,
+    FMT_NB,
+};
+
+/* Stream Config struct */
+struct StreamConfig {
+    char *stream_name;
+    char *input_uri;
+    enum StreamFormat *formats;
+    int nb_formats;
+};
+
 /* HTTPD Config struct */
 struct HTTPDConfig {
+    char *server_name;
     char *bind_address;
     int port;
     int accept_timeout;
+    struct StreamConfig *streams;
+    int nb_streams;
 };
 
 /* HTTPClient struct, this information is shared between ffserver and the httpd implementation */
