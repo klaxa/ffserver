@@ -67,16 +67,15 @@ struct HTTPDInterface {
 Usage
 -----
 
-Currently streams can be supplied as a stream through stdin or any ffmpeg-
-compatible URI, e.g. files or network locations. Examples:
+To use ffserver, a config file has to be created that defines what streams to
+read and where to serve them. A sample config is supplied as sample_config.lua.
+This sample config defines two servers with a total of three streams. The first
+server serves two streams on all interfaces on port 8080, while the second
+server serves one stream on 127.0.0.1. The streams can be received by
+requesting the configured stream name as the GET parameter in the HTTP request.
+In the sample config, this would be "http://<server_address>:8080/default_stream"
+for the first stream.
 
-cat somefile.mkv | ./ffserver
-
-./ffserver somefile.mkv
-
-./ffserver http://somehost/somefile.mkv
-
-This will start reading the file and open port 8080 for HTTP client connections.
 The stream is read in real time from whatever resource it is retrieved.
 Currently a maximum of 16 clients is implemented.
 
