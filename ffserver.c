@@ -554,21 +554,35 @@ void *run_server(void *arg) {
         for (i = 0; i < pub->nb_threads; i++) {
             winfos[i].pub = pub;
             winfos[i].thread_id = i;
-            pthread_create(&w_threads[i], NULL, write_thread, &winfos_p[stream_index][i]);
+            ret = pthread_create(&w_threads[i], NULL, write_thread, &winfos_p[stream_index][i]);
+            if (ret != 0) {
+                pub->shutdown = 1;
+                goto end;
+            }
         }
         w_threads_p[stream_index] = w_threads;
-        pthread_create(&r_thread, NULL, read_thread, &rinfos[stream_index]);
+        ret = pthread_create(&r_thread, NULL, read_thread, &rinfos[stream_index]);
+        if (ret != 0) {
+            pub->shutdown = 1;
+            goto end;
+        }
         r_threads[stream_index] = r_thread;
     }
 
 
     //pthread_create(&a_thread, NULL, accept_thread, &ainfo);
     accept_thread(&ainfo);
+
+end:
     for (stream_index = 0; stream_index < config->nb_streams; stream_index++) {
-        pthread_join(r_threads[stream_index], NULL);
+        // in case of thread creation failure this might NULL
+        if (r_threads[stream_index])
+            pthread_join(r_threads[stream_index], NULL);
         if (pubs[stream_index]) {
             for (i = 0; i < pubs[stream_index]->nb_threads; i++) {
-                pthread_join(w_threads_p[stream_index][i], NULL);
+                // might also be NULL because of thread creation failure
+                if (w_threads_p[stream_index][i])
+                    pthread_join(w_threads_p[stream_index][i], NULL);
             }
         }
         av_free(winfos_p[stream_index]);
@@ -592,7 +606,7 @@ int main(int argc, char *argv[])
     struct HTTPDConfig *configs;
     int nb_configs;
     pthread_t *server_threads;
-    int i;
+    int i, ret;
 
     if (argc < 2) {
         printf("Usage: %s config.lua\n", argv[0]);
@@ -606,12 +620,16 @@ int main(int argc, char *argv[])
     }
     server_threads = av_mallocz_array(nb_configs, sizeof(pthread_t));
     for (i = 0; i < nb_configs; i++) {
-        config_dump(configs + i);
-        pthread_create(&server_threads[i], NULL, run_server, configs + i);
+        config_dump(configs + i, stderr);
+        ret = pthread_create(&server_threads[i], NULL, run_server, configs + i);
+        if (ret != 0) {
+            server_threads[i] = 0;
+        }
     }
 
     for (i = 0; i < nb_configs; i++) {
-        pthread_join(server_threads[i], NULL);
+        if (server_threads[i])
+            pthread_join(server_threads[i], NULL);
         config_free(configs + i);
     }
     av_free(configs);
