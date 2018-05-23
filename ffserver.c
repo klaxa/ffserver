@@ -152,7 +152,7 @@ void *read_thread(void *arg)
                 publisher_push_segment(info->pub, seg);
                 av_log(NULL, AV_LOG_DEBUG, "New segment pushed.\n");
                 publish(info->pub);
-				av_log(NULL, AV_LOG_DEBUG, "Published new segment.\n");
+                av_log(NULL, AV_LOG_DEBUG, "Published new segment.\n");
             }
             segment_init(&seg, ifmt_ctx);
             seg->id = id++;
@@ -337,8 +337,9 @@ void *accept_thread(void *arg)
         ifmt_ctx = NULL;
         for (i = 0; i < config->nb_streams; i++) {
             stream_name = info->pubs[i]->stream_name;
-            //       skip leading '/'  ---v
-            if(!strncmp(client->resource + 1, stream_name, strlen(stream_name))) {
+            //           skip leading '/'  ---v
+            if (client->resource && strlen(client->resource)
+                && !strncmp(client->resource + 1, stream_name, strlen(stream_name))) {
                 pub = info->pubs[i];
                 ifmt_ctx = info->ifmt_ctxs[i];
                 break;
