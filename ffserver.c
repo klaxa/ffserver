@@ -223,12 +223,25 @@ void write_segment(struct Client *c)
         }
         
         avio_buffer = (unsigned char*) av_malloc(AV_BUFSIZE);
+        if (!avio_buffer) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate avio_buffer\n");
+            avformat_free_context(fmt_ctx);
+            client_disconnect(c, 0);
+            return;
+        }
         avio_ctx = avio_alloc_context(avio_buffer, AV_BUFSIZE, 0, &info, &segment_read, NULL, NULL);
-        
+        if (!avio_ctx) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate avio_ctx\n");
+            avformat_free_context(fmt_ctx);
+            av_free(avio_buffer);
+            client_disconnect(c, 0);
+            return;
+        }
         fmt_ctx->pb = avio_ctx;
         ret = avformat_open_input(&fmt_ctx, NULL, seg->ifmt, NULL);
         if (ret < 0) {
             av_log(avio_ctx, AV_LOG_ERROR, "Could not open input\n");
+            avformat_close_input(&fmt_ctx);
             av_free(avio_ctx->buffer);
             avio_context_free(&avio_ctx);
             client_disconnect(c, 0);
@@ -238,6 +251,7 @@ void write_segment(struct Client *c)
         ret = avformat_find_stream_info(fmt_ctx, NULL);
         if (ret < 0) {
             av_log(fmt_ctx, AV_LOG_ERROR, "Could not find stream information\n");
+            avformat_close_input(&fmt_ctx);
             av_free(avio_ctx->buffer);
             avio_context_free(&avio_ctx);
             client_disconnect(c, 0);
@@ -270,9 +284,8 @@ void write_segment(struct Client *c)
                 return;
             }
         }
-        avformat_close_input(&fmt_ctx);
         av_free(avio_ctx->buffer);
-        avformat_free_context(fmt_ctx);
+        avformat_close_input(&fmt_ctx);
         avio_context_free(&avio_ctx);
         pthread_mutex_lock(&c->buffer_lock);
         av_fifo_drain(c->buffer, sizeof(struct Segment*));
@@ -366,13 +379,25 @@ void *accept_thread(void *arg)
         }
         
         avio_buffer = av_malloc(AV_BUFSIZE);
+        if (!avio_buffer) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate output format context.\n");
+            publisher_cancel_reserve(pub);
+            info->httpd->close(server, client);
+            continue;
+        }
         ffinfo = av_malloc(sizeof(struct FFServerInfo));
+        if (!ffinfo) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate FFServerInfo struct.\n");
+            publisher_cancel_reserve(pub);
+            info->httpd->close(server, client);
+            continue;
+        }
         ffinfo->httpd = info->httpd;
         ffinfo->client = client;
         ffinfo->server = server;
         client_ctx = avio_alloc_context(avio_buffer, AV_BUFSIZE, 1, ffinfo, NULL, &ffserver_write, NULL);
         if (!client_ctx) {
-            av_log(client, AV_LOG_ERROR, "Could not allocate output format context.\n");
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate output format context.\n");
             publisher_cancel_reserve(pub);
             info->httpd->close(server, client);
             av_free(client_ctx->buffer);
@@ -382,7 +407,7 @@ void *accept_thread(void *arg)
         }
         avformat_alloc_output_context2(&ofmt_ctx, NULL, "matroska", NULL);
         if (!ofmt_ctx) {
-            av_log(client, AV_LOG_ERROR, "Could not allocate output format context.\n");
+            av_log(client_ctx, AV_LOG_ERROR, "Could not allocate output format context.\n");
             publisher_cancel_reserve(pub);
             info->httpd->close(server, client);
             avformat_free_context(ofmt_ctx);
@@ -507,7 +532,16 @@ void *run_server(void *arg) {
     pthread_t **w_threads_p;
     
     pubs = av_mallocz_array(config->nb_streams, sizeof(struct PublisherContext*));
+    if (!pubs) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate publishers\n");
+        return NULL;
+    }
     ifmt_ctxs = av_mallocz_array(config->nb_streams, sizeof(AVFormatContext*));
+    if (!ifmt_ctxs) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate input format contexts.\n");
+        av_free(pubs);
+        return NULL;
+    }
     
     av_log_set_level(AV_LOG_INFO);
     
@@ -518,9 +552,39 @@ void *run_server(void *arg) {
     ainfo.config = config;
     
     rinfos = av_mallocz_array(config->nb_streams, sizeof(struct ReadInfo));
+    if (!rinfos) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate read infos.\n");
+        av_free(pubs);
+        av_free(ifmt_ctxs);
+        return NULL;
+    }
     winfos_p = av_mallocz_array(config->nb_streams, sizeof(struct WriteInfo*));
+    if (!winfos_p) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate write info pointers.\n");
+        av_free(pubs);
+        av_free(ifmt_ctxs);
+        av_free(rinfos);
+        return NULL;
+    }
     r_threads = av_mallocz_array(config->nb_streams, sizeof(pthread_t));
+    if (!r_threads) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate read thread handles.\n");
+        av_free(pubs);
+        av_free(ifmt_ctxs);
+        av_free(rinfos);
+        av_free(winfos_p);
+        return NULL;
+    }
     w_threads_p = av_mallocz_array(config->nb_streams, sizeof(pthread_t*));
+    if (!w_threads_p) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate write thread handle pointers.\n");
+        av_free(pubs);
+        av_free(ifmt_ctxs);
+        av_free(rinfos);
+        av_free(winfos_p);
+        av_free(r_threads);
+        return NULL;
+    }
     
     for (stream_index = 0; stream_index < config->nb_streams; stream_index++) {
         struct PublisherContext *pub = NULL;
@@ -547,8 +611,15 @@ void *run_server(void *arg) {
         rinfos[stream_index] = rinfo;
 
         w_threads = av_mallocz_array(pub->nb_threads, sizeof(pthread_t));
+        if (!w_threads) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate write thread handles.\n");
+            continue;
+        }
         winfos = av_mallocz_array(pub->nb_threads, sizeof(struct WriteInfo));
-
+        if (!winfos) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate write infos.\n");
+            continue;
+        }
         w_threads_p[stream_index] = w_threads;
         winfos_p[stream_index] = winfos;
 
@@ -620,6 +691,10 @@ int main(int argc, char *argv[])
         return 1;
     }
     server_threads = av_mallocz_array(nb_configs, sizeof(pthread_t));
+    if (!server_threads) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate server thread handles.\n");
+        return AVERROR(ENOMEM);
+    }
     for (i = 0; i < nb_configs; i++) {
         config_dump(configs + i, stderr);
         ret = pthread_create(&server_threads[i], NULL, run_server, configs + i);
