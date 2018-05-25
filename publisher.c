@@ -97,17 +97,37 @@ void publisher_init(struct PublisherContext **pub, char *stream_name)
 {
     int i;
     struct PublisherContext *pc = (struct PublisherContext*) av_malloc(sizeof(struct PublisherContext));
+    if (!pc) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate publisher context.\n");
+        return;
+    }
     pc->nb_threads = 8;
     pc->stream_name = stream_name;
     pc->current_segment_id = -1;
     pc->shutdown = 0;
     pc->buffer = av_fifo_alloc_array(sizeof(struct Segment), MAX_SEGMENTS);
+    if (!pc->buffer) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate publisher buffer.\n");
+        av_free(pc);
+        return;
+    }
     pc->fs_buffer = av_fifo_alloc_array(sizeof(struct Segment), MAX_SEGMENTS);
+    if (!pc->fs_buffer) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate publisher fast-start buffer.\n");
+        av_fifo_free(pc->buffer);
+        av_free(pc);
+        return;
+    }
     pthread_mutex_init(&pc->buffer_lock, NULL);
     pthread_mutex_init(&pc->fs_buffer_lock, NULL);
     for (i = 0; i < MAX_CLIENTS; i++) {
         struct Client *c = &pc->clients[i];
         c->buffer = av_fifo_alloc_array(sizeof(struct Segment), MAX_SEGMENTS);
+        if (!c->buffer) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate client buffer.\n");
+            publisher_free(pc);
+            return;
+        }
         c->ofmt_ctx = NULL;
         c->ffinfo = NULL;
         c->id = i;
