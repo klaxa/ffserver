@@ -82,6 +82,10 @@ int segment_write(void *opaque, unsigned char *buf, int buf_size)
     struct Segment *seg = (struct Segment*) opaque;
     seg->size += buf_size;
     seg->buf = (unsigned char*) av_realloc(seg->buf, seg->size);
+    if (!seg->buf) {
+        av_log(NULL, AV_LOG_ERROR, "Could not grow segment.\n");
+        return AVERROR(ENOMEM);
+    }
     memcpy(seg->buf + seg->size - buf_size, buf, buf_size);
     return buf_size;
 }
@@ -110,6 +114,10 @@ void segment_init(struct Segment **seg_p, AVFormatContext *fmt)
     int i;
     AVStream *in_stream, *out_stream;
     struct Segment *seg = (struct Segment*) av_malloc(sizeof(struct Segment));
+    if (!seg) {
+        av_log(fmt, AV_LOG_ERROR, "Could not allocate segment.\n");
+        return;
+    }
 
     seg->ifmt = av_find_input_format("matroska");
     seg->fmt_ctx = NULL;
@@ -119,10 +127,28 @@ void segment_init(struct Segment **seg_p, AVFormatContext *fmt)
     seg->ts_len = 0;
     seg->buf = NULL;
     seg->avio_buffer = (unsigned char*) av_malloc(AV_BUFSIZE);
+    if (!seg->avio_buffer) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate segment avio_buffer.\n");
+        av_free(seg);
+        return;
+    }
     pthread_mutex_init(&seg->nb_read_lock, NULL);
     seg->io_ctx = avio_alloc_context(seg->avio_buffer, AV_BUFSIZE, 1, seg, NULL, &segment_write, NULL);
+    if (!seg->io_ctx) {
+        av_log(NULL, AV_LOG_ERROR, "Could not allocate segment io context.\n");
+        av_free(seg->avio_buffer);
+        av_free(seg);
+        return;
+    }
     seg->io_ctx->seekable = 0;
     avformat_alloc_output_context2(&seg->fmt_ctx, NULL, "matroska", NULL);
+    if (!seg->fmt_ctx) {
+        av_log(seg->io_ctx, AV_LOG_ERROR, "Could not allocate segment output context.\n");
+        av_free(seg->avio_buffer);
+        av_free(seg->io_ctx);
+        av_free(seg);
+        return;
+    }
     if ((ret = av_opt_set_int(seg->fmt_ctx, "flush_packets", 1, AV_OPT_SEARCH_CHILDREN)) < 0) {
         av_log(seg->fmt_ctx, AV_LOG_WARNING, "Could not set flush_packets!\n");
     }
