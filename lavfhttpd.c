@@ -74,6 +74,10 @@ int lavfhttpd_accept(void *server, struct HTTPClient **client, int reply_code)
     client_ctx->seekable = 0;
     ret2 = HTTPD_OK;
     client_http = av_malloc(sizeof(struct HTTPClient));
+    if (!client_http) {
+        av_log(server, AV_LOG_ERROR, "Could not allocate http client.\n");
+        return HTTPD_OTHER_ERROR;
+    }
     client_http->method = NULL;
     client_http->resource = NULL;
     client_http->httpd_data = client_ctx;
