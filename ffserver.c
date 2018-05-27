@@ -42,6 +42,7 @@
 
 #define BUFFER_SECS 30
 #define LISTEN_TIMEOUT_MSEC 1000
+#define AUDIO_ONLY_SEGMENT_SECONDS 2
 
 struct ReadInfo {
     struct PublisherContext *pub;
@@ -76,8 +77,9 @@ void *read_thread(void *arg)
     AVFormatContext *ifmt_ctx = info->ifmt_ctx;
     int ret, i;
     int video_idx = -1;
+    int audio_only = 0;
     int id = 0;
-    int64_t pts, now, start;
+    int64_t pts, now, start, last_cut = 0;
     int64_t *ts;
     struct Segment *seg = NULL;
     AVPacket pkt;
@@ -99,10 +101,8 @@ void *read_thread(void *arg)
             break;
         }
     }
-    if (video_idx == -1) {
-        av_log(ifmt_ctx, AV_LOG_ERROR, "No video stream found.\n");
-        goto end;
-    }
+    if (video_idx == -1)
+        audio_only = 1;
     
     
     // All information needed to start segmenting the file is gathered now.
@@ -141,8 +141,9 @@ void *read_thread(void *arg)
             now = av_gettime_relative() - start;
         }
         
-        // keyframe or first Segment
-        if ((pkt.flags & AV_PKT_FLAG_KEY && pkt.stream_index == video_idx) || !seg) {
+        // keyframe or first Segment or audio_only and more than AUDIO_ONLY_SEGMENT_SECONDS passed since last cut
+        if ((pkt.flags & AV_PKT_FLAG_KEY && pkt.stream_index == video_idx) || !seg ||
+            (audio_only && pts - last_cut >= AUDIO_ONLY_SEGMENT_SECONDS * AV_TIME_BASE)) {
             if (seg) {
                 segment_close(seg);
                 publisher_push_segment(info->pub, seg);
@@ -150,6 +151,7 @@ void *read_thread(void *arg)
                 publish(info->pub);
                 av_log(NULL, AV_LOG_DEBUG, "Published new segment.\n");
             }
+            last_cut = pts;
             segment_init(&seg, ifmt_ctx);
             if (!seg) {
                 av_log(NULL, AV_LOG_ERROR, "Segment initialization failed, shutting down.\n");
