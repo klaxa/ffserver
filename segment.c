@@ -116,6 +116,7 @@ void segment_init(struct Segment **seg_p, AVFormatContext *fmt)
     struct Segment *seg = (struct Segment*) av_malloc(sizeof(struct Segment));
     if (!seg) {
         av_log(fmt, AV_LOG_ERROR, "Could not allocate segment.\n");
+        *seg_p = NULL;
         return;
     }
 

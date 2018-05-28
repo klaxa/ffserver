@@ -151,6 +151,10 @@ void *read_thread(void *arg)
                 av_log(NULL, AV_LOG_DEBUG, "Published new segment.\n");
             }
             segment_init(&seg, ifmt_ctx);
+            if (!seg) {
+                av_log(NULL, AV_LOG_ERROR, "Segment initialization failed, shutting down.\n");
+                goto end;
+            }
             seg->id = id++;
             av_log(NULL, AV_LOG_DEBUG, "Starting new segment, id: %d\n", seg->id);
         }
