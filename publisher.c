@@ -101,7 +101,7 @@ void publisher_init(struct PublisherContext **pub, char *stream_name)
         av_log(NULL, AV_LOG_ERROR, "Could not allocate publisher context.\n");
         return;
     }
-    pc->nb_threads = 8;
+    pc->nb_threads = 1;
     pc->stream_name = stream_name;
     pc->current_segment_id = -1;
     pc->shutdown = 0;
