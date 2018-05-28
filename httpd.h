@@ -26,13 +26,13 @@
 
 #include "publisher.h"
 
-/* Supported stream formats, for now only matroska */
+/** Supported stream formats, for now only matroska */
 enum StreamFormat {
     FMT_MATROSKA = 0,
     FMT_NB,
 };
 
-/* Stream Config struct */
+/** Stream Config struct */
 struct StreamConfig {
     char *stream_name;
     char *input_uri;
@@ -40,7 +40,7 @@ struct StreamConfig {
     int nb_formats;
 };
 
-/* HTTPD Config struct */
+/** HTTPD Config struct */
 struct HTTPDConfig {
     char *server_name;
     char *bind_address;
@@ -50,7 +50,7 @@ struct HTTPDConfig {
     int nb_streams;
 };
 
-/* HTTPClient struct, this information is shared between ffserver and the httpd implementation */
+/** HTTPClient struct, this information is shared between ffserver and the httpd implementation */
 struct HTTPClient {
     /* the method requested by the client, this field has to be set and freed by the httpd implementation */
     char *method;
@@ -59,7 +59,7 @@ struct HTTPClient {
     void *httpd_data; // httpd implementation specific data
 };
 
-/* HTTPDInterface that an httpd implementation must provide */
+/** HTTPDInterface that an httpd implementation must provide */
 struct HTTPDInterface {
     int (*init)  (void **server, struct HTTPDConfig config);
     int (*free)  (void *server);
@@ -70,6 +70,6 @@ struct HTTPDInterface {
     void (*shutdown)(void *server);
 };
 
-/* Current HTTPDInterface implementation using lavformat */
+/** Current HTTPDInterface implementation using lavformat */
 extern struct HTTPDInterface lavfhttpd;
 #endif
