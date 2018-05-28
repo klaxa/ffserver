@@ -84,8 +84,6 @@ void *read_thread(void *arg)
     AVStream *in_stream;
     AVRational tb = {1, AV_TIME_BASE};
     AVStream *stream;
-    AVCodecParameters *params;
-    enum AVMediaType type;
     
     if ((ret = avformat_find_stream_info(ifmt_ctx, NULL)) < 0) {
         av_log(ifmt_ctx, AV_LOG_ERROR, "Could not get input stream info.\n");
@@ -96,9 +94,7 @@ void *read_thread(void *arg)
     for (i = 0; i < ifmt_ctx->nb_streams; i++) {
         av_log(ifmt_ctx, AV_LOG_DEBUG, "Checking stream %d\n", i);
         stream = ifmt_ctx->streams[i];
-        params = stream->codecpar;
-        type = params->codec_type;
-        if (type == AVMEDIA_TYPE_VIDEO) {
+        if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
             video_idx = i;
             break;
         }
