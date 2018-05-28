@@ -79,9 +79,7 @@ void *read_thread(void *arg)
     struct Segment *seg = NULL;
     AVPacket pkt;
     AVStream *in_stream;
-    AVRational tb;
-    tb.num = 1;
-    tb.den = AV_TIME_BASE;
+    AVRational tb = {1, AV_TIME_BASE};
     AVStream *stream;
     AVCodecParameters *params;
     enum AVMediaType type;
@@ -133,7 +131,7 @@ void *read_thread(void *arg)
         pkt.pos = -1;
         
         // current pts
-        pts = pkt.pts; //av_rescale_q(pkt.pts, in_stream->time_base, tb);
+        pts = pkt.pts;
         
         // current stream "uptime"
         now = av_gettime_relative() - start;
@@ -200,6 +198,7 @@ void write_segment(struct Client *c)
     struct Segment *seg;
     int ret;
     int pkt_count = 0;
+    AVRational tb = {1, AV_TIME_BASE};
     pthread_mutex_lock(&c->buffer_lock);
     if (av_fifo_size(c->buffer) > 0) {
         AVFormatContext *fmt_ctx;
@@ -249,8 +248,13 @@ void write_segment(struct Client *c)
             if (ret < 0)
                 break;
             
-            pkt.dts = seg->ts[pkt_count];
-            pkt.pts = seg->ts[pkt_count+1];
+            pkt.dts = av_rescale_q_rnd(seg->ts[pkt_count], tb,
+                                                        c->ofmt_ctx->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+            pkt.pts = av_rescale_q_rnd(seg->ts[pkt_count+1], tb,
+                                                        c->ofmt_ctx->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+            pkt.pos = -1;
             pkt_count += 2;
             ret = av_write_frame(c->ofmt_ctx, &pkt);
             av_packet_unref(&pkt);
