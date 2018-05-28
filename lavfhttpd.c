@@ -66,10 +66,13 @@ int lavfhttpd_accept(void *server, struct HTTPClient **client, int reply_code)
     int reply_code2 = reply_code;
     char *method, *resource;
     if ((ret = avio_accept(server_ctx, &client_ctx)) < 0) {
-        if (ret == AVERROR(ETIMEDOUT))
+        if (ret == AVERROR(ETIMEDOUT)) {
             return HTTPD_LISTEN_TIMEOUT;
-        else
+        } else {
+            if (client_ctx)
+                avio_context_free(&client_ctx);
             return HTTPD_OTHER_ERROR;
+        }
     }
     client_ctx->seekable = 0;
     ret2 = HTTPD_OK;
