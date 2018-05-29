@@ -534,13 +534,12 @@ void *run_server(void *arg) {
     pubs = av_mallocz_array(config->nb_streams, sizeof(struct PublisherContext*));
     if (!pubs) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate publishers\n");
-        return NULL;
+        goto error_cleanup;
     }
     ifmt_ctxs = av_mallocz_array(config->nb_streams, sizeof(AVFormatContext*));
     if (!ifmt_ctxs) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate input format contexts.\n");
-        av_free(pubs);
-        return NULL;
+        goto error_cleanup;
     }
     
     av_log_set_level(AV_LOG_INFO);
@@ -554,36 +553,22 @@ void *run_server(void *arg) {
     rinfos = av_mallocz_array(config->nb_streams, sizeof(struct ReadInfo));
     if (!rinfos) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate read infos.\n");
-        av_free(pubs);
-        av_free(ifmt_ctxs);
-        return NULL;
+        goto error_cleanup;
     }
     winfos_p = av_mallocz_array(config->nb_streams, sizeof(struct WriteInfo*));
     if (!winfos_p) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate write info pointers.\n");
-        av_free(pubs);
-        av_free(ifmt_ctxs);
-        av_free(rinfos);
-        return NULL;
+        goto error_cleanup;
     }
     r_threads = av_mallocz_array(config->nb_streams, sizeof(pthread_t));
     if (!r_threads) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate read thread handles.\n");
-        av_free(pubs);
-        av_free(ifmt_ctxs);
-        av_free(rinfos);
-        av_free(winfos_p);
-        return NULL;
+        goto error_cleanup;
     }
     w_threads_p = av_mallocz_array(config->nb_streams, sizeof(pthread_t*));
     if (!w_threads_p) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate write thread handle pointers.\n");
-        av_free(pubs);
-        av_free(ifmt_ctxs);
-        av_free(rinfos);
-        av_free(winfos_p);
-        av_free(r_threads);
-        return NULL;
+        goto error_cleanup;
     }
     
     for (stream_index = 0; stream_index < config->nb_streams; stream_index++) {
@@ -670,6 +655,15 @@ end:
     av_free(pubs);
     av_free(ifmt_ctxs);
 
+    return NULL;
+
+error_cleanup:
+    av_free(rinfos);
+    av_free(winfos_p);
+    av_free(r_threads);
+    av_free(w_threads_p);
+    av_free(pubs);
+    av_free(ifmt_ctxs);
     return NULL;
 }
 
