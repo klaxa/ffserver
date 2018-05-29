@@ -210,7 +210,7 @@ void write_segment(struct Client *c)
         struct SegmentReadInfo info;
         unsigned char *avio_buffer;
         
-        av_fifo_generic_peek(c->buffer, &seg, sizeof(struct Segment*), NULL);
+        av_fifo_generic_peek(c->buffer, &seg, sizeof(seg), NULL);
         pthread_mutex_unlock(&c->buffer_lock);
         c->current_segment_id = seg->id;
         info.buf = seg->buf;
@@ -288,7 +288,7 @@ void write_segment(struct Client *c)
         avformat_close_input(&fmt_ctx);
         avio_context_free(&avio_ctx);
         pthread_mutex_lock(&c->buffer_lock);
-        av_fifo_drain(c->buffer, sizeof(struct Segment*));
+        av_fifo_drain(c->buffer, sizeof(seg));
         pthread_mutex_unlock(&c->buffer_lock);
         segment_unref(seg);
         client_set_state(c, WRITABLE);
@@ -385,7 +385,7 @@ void *accept_thread(void *arg)
             info->httpd->close(server, client);
             continue;
         }
-        ffinfo = av_malloc(sizeof(struct FFServerInfo));
+        ffinfo = av_malloc(sizeof(*ffinfo));
         if (!ffinfo) {
             av_log(NULL, AV_LOG_ERROR, "Could not allocate FFServerInfo struct.\n");
             publisher_cancel_reserve(pub);
