@@ -224,14 +224,14 @@ void write_segment(struct Client *c)
         
         avio_buffer = (unsigned char*) av_malloc(AV_BUFSIZE);
         if (!avio_buffer) {
-            av_log(NULL, AV_LOG_ERROR, "Could not allocate avio_buffer\n");
+            av_log(fmt_ctx, AV_LOG_ERROR, "Could not allocate avio_buffer\n");
             avformat_free_context(fmt_ctx);
             client_disconnect(c, 0);
             return;
         }
         avio_ctx = avio_alloc_context(avio_buffer, AV_BUFSIZE, 0, &info, &segment_read, NULL, NULL);
         if (!avio_ctx) {
-            av_log(NULL, AV_LOG_ERROR, "Could not allocate avio_ctx\n");
+            av_log(fmt_ctx, AV_LOG_ERROR, "Could not allocate avio_ctx\n");
             avformat_free_context(fmt_ctx);
             av_free(avio_buffer);
             client_disconnect(c, 0);
@@ -380,14 +380,14 @@ void *accept_thread(void *arg)
         
         avio_buffer = av_malloc(AV_BUFSIZE);
         if (!avio_buffer) {
-            av_log(NULL, AV_LOG_ERROR, "Could not allocate output format context.\n");
+            av_log(client_ctx, AV_LOG_ERROR, "Could not allocate output format context.\n");
             publisher_cancel_reserve(pub);
             info->httpd->close(server, client);
             continue;
         }
         ffinfo = av_malloc(sizeof(*ffinfo));
         if (!ffinfo) {
-            av_log(NULL, AV_LOG_ERROR, "Could not allocate FFServerInfo struct.\n");
+            av_log(client_ctx, AV_LOG_ERROR, "Could not allocate FFServerInfo struct.\n");
             publisher_cancel_reserve(pub);
             info->httpd->close(server, client);
             continue;
