@@ -59,7 +59,7 @@ struct AcceptInfo {
     struct HTTPDInterface *httpd;
     AVFormatContext **ifmt_ctxs;
     struct HTTPDConfig *config;
-    int nb_pub; /* number of publishers (streams) equal to number of ifmt_ctx */
+    int nb_pub; /** number of publishers (streams) equal to number of ifmt_ctx */
 };
 
 
