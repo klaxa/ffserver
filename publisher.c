@@ -271,7 +271,7 @@ void publish(struct PublisherContext *pub)
         for (i = 0; i < MAX_CLIENTS; i++) {
             switch(pub->clients[i].state) {
                 case BUFFER_FULL:
-                    av_log(pub, AV_LOG_WARNING, "Dropping segment for client %d, buffer full.\n", i);
+                    av_log(NULL, AV_LOG_WARNING, "Dropping segment for client %d, buffer full.\n", i);
                     continue;
                 case WAIT:
                 case WRITABLE:
