@@ -52,11 +52,12 @@ struct HTTPDConfig {
 
 /** HTTPClient struct, this information is shared between ffserver and the httpd implementation */
 struct HTTPClient {
-    /* the method requested by the client, this field has to be set and freed by the httpd implementation */
+    /** the method requested by the client, this field has to be set and freed by the httpd implementation */
     char *method;
-    /* the resource requested by the client, this field has to be set and freed by the httpd implementation */
+    /** the resource requested by the client, this field has to be set and freed by the httpd implementation */
     char *resource;
-    void *httpd_data; // httpd implementation specific data
+    /** httpd implementation specific data */
+    void *httpd_data;
 };
 
 /** HTTPDInterface that an httpd implementation must provide */
