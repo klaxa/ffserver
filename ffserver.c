@@ -222,7 +222,7 @@ void write_segment(struct Client *c)
             return;
         }
         
-        avio_buffer = (unsigned char*) av_malloc(AV_BUFSIZE);
+        avio_buffer = av_malloc(AV_BUFSIZE);
         if (!avio_buffer) {
             av_log(fmt_ctx, AV_LOG_ERROR, "Could not allocate avio_buffer\n");
             avformat_free_context(fmt_ctx);
