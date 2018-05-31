@@ -95,10 +95,8 @@ int lavfhttpd_accept(void *server, struct HTTPClient **client, int reply_code)
                 av_log(client_ctx, AV_LOG_WARNING, "Failed to set reply_code: %s.\n", av_err2str(ret));
             }
         }
-        if (client_http->method)
-            av_free(client_http->method);
-        if (client_http->resource)
-            av_free(client_http->resource);
+        av_free(client_http->method);
+        av_free(client_http->resource);
         client_http->method = av_strdup(method);
         client_http->resource = av_strdup(resource);
         av_free(method);
@@ -141,10 +139,8 @@ void lavfhttpd_close(void *server, struct HTTPClient *client)
 {
     AVIOContext *client_ctx = (AVIOContext*) client->httpd_data;
     avio_close(client_ctx);
-    if (client->method)
-        av_free(client->method);
-    if (client->resource)
-        av_free(client->resource);
+    av_free(client->method);
+    av_free(client->resource);
     av_free(client);
 }
 
