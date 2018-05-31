@@ -81,7 +81,7 @@ int segment_write(void *opaque, unsigned char *buf, int buf_size)
 {
     struct Segment *seg = (struct Segment*) opaque;
     seg->size += buf_size;
-    seg->buf = (unsigned char*) av_realloc(seg->buf, seg->size);
+    seg->buf = av_realloc(seg->buf, seg->size);
     if (!seg->buf) {
         av_log(NULL, AV_LOG_ERROR, "Could not grow segment.\n");
         return AVERROR(ENOMEM);
@@ -127,7 +127,7 @@ void segment_init(struct Segment **seg_p, AVFormatContext *fmt)
     seg->ts = NULL;
     seg->ts_len = 0;
     seg->buf = NULL;
-    seg->avio_buffer = (unsigned char*) av_malloc(AV_BUFSIZE);
+    seg->avio_buffer = av_malloc(AV_BUFSIZE);
     if (!seg->avio_buffer) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate segment avio_buffer.\n");
         av_free(seg);
