@@ -21,6 +21,7 @@
 
 #include "httpd.h"
 #include <libavutil/opt.h>
+#include <libavformat/avformat.h>
 
 
 int lavfhttpd_init(void **server, struct HTTPDConfig config)
@@ -57,13 +58,13 @@ int lavfhttpd_init(void **server, struct HTTPDConfig config)
     return 0;
 }
 
-int lavfhttpd_accept(void *server, struct HTTPClient **client, int reply_code)
+int lavfhttpd_accept(void *server, struct HTTPClient **client, const char **valid_files)
 {
     AVIOContext *server_ctx = (AVIOContext*) server;
     AVIOContext *client_ctx = NULL;
     struct HTTPClient *client_http = NULL;
     int ret, ret2, handshake;
-    int reply_code2 = reply_code;
+    int reply_code2 = 200; // = reply_code;
     char *method, *resource;
     if ((ret = avio_accept(server_ctx, &client_ctx)) < 0) {
         if (ret == AVERROR(ETIMEDOUT)) {
