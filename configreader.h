@@ -20,6 +20,7 @@
 #define CONFIGREADER_H
 
 #include "httpd.h"
+#include <stdio.h>
 
 /**
  * Read configurations from a file using the lua format. The configurations

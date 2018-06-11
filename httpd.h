@@ -24,11 +24,11 @@
 #define HTTPD_CLIENT_ERROR -2
 #define HTTPD_OTHER_ERROR -3
 
-#include "publisher.h"
-
-/** Supported stream formats, for now only matroska */
+/** Supported stream formats */
 enum StreamFormat {
     FMT_MATROSKA = 0,
+    FMT_HLS,
+    FMT_DASH,
     FMT_NB,
 };
 
@@ -60,11 +60,12 @@ struct HTTPClient {
     void *httpd_data;
 };
 
+
 /** HTTPDInterface that an httpd implementation must provide */
 struct HTTPDInterface {
     int (*init)  (void **server, struct HTTPDConfig config);
     int (*free)  (void *server);
-    int (*accept)(void *server, struct HTTPClient **client, int reply_code);
+    int (*accept)(void *server, struct HTTPClient **client, const char **valid_files);
     int (*write) (void *server, struct HTTPClient *client, const unsigned char *buf, int size);
     int (*read)  (void *server, struct HTTPClient *client, unsigned char *buf, int size);
     void (*close)(void *server, struct HTTPClient *client);

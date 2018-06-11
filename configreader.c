@@ -27,7 +27,7 @@
 #include <libavutil/mem.h>
 #include <libavutil/error.h>
 
-const char *stream_format_names[] = { "mkv" };
+const char *stream_format_names[] = { "mkv", "hls", "dash" };
 
 static struct HTTPDConfig *parsed_configs = NULL;
 
@@ -152,8 +152,12 @@ int configs_parse(lua_State *L)
                                 return luaL_error(L, "Error could not allocate stream formats");
                             }
                             key = lua_tostring(L, -1);
-                            if (!strncmp("mkv", key, 3)) {
+                            if (!strcmp("mkv", key)) {
                                 stream->formats[nb_formats++] = FMT_MATROSKA;
+                            } else if (!strcmp("hls", key)) {
+                                stream->formats[nb_formats++] = FMT_HLS;
+                            } else if (!strcmp("dash", key)) {
+                                stream->formats[nb_formats++] = FMT_DASH;
                             } else {
                                 fprintf(stderr, "Warning unknown format (%s) in stream format configuration.\n",
                                                                                                            key);
