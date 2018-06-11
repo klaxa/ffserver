@@ -15,7 +15,7 @@
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
- 
+
 #ifndef LAVFHTTPD_H
 #define LAVFHTTPD_H
 
@@ -29,30 +29,30 @@ int lavfhttpd_init(void **server, struct HTTPDConfig config)
     int ret;
     AVDictionary *opts = NULL;
     AVIOContext *server_ctx = NULL;
-    
+
     snprintf(out_uri, 1024, "http://%s:%d", config.bind_address, config.port);
-    
+
     avformat_network_init();
-    
+
     if ((ret = av_dict_set(&opts, "listen", "2", 0)) < 0) {
         av_log(opts, AV_LOG_ERROR, "Failed to set listen mode for server: %s\n", av_err2str(ret));
         av_free(opts);
         return -1;
     }
-    
+
     if ((ret = av_dict_set_int(&opts, "listen_timeout", config.accept_timeout, 0)) < 0) {
         av_log(opts, AV_LOG_ERROR, "Failed to set listen_timeout for server: %s\n", av_err2str(ret));
         av_free(opts);
         return -1;
     }
-    
+
     if ((ret = avio_open2(&server_ctx, out_uri, AVIO_FLAG_WRITE, NULL, &opts)) < 0) {
         av_log(server, AV_LOG_ERROR, "Failed to open server: %s\n", av_err2str(ret));
         av_free(opts);
         return -1;
     }
     av_free(opts);
-    
+
     *server = server_ctx;
     return 0;
 }
@@ -106,11 +106,11 @@ int lavfhttpd_accept(void *server, struct HTTPClient **client, int reply_code)
         ret2 = HTTPD_CLIENT_ERROR;
         reply_code2 = 400;
     }
-    
+
     if ((ret = av_opt_set_int(client_ctx, "reply_code", reply_code2, AV_OPT_SEARCH_CHILDREN)) < 0) {
         av_log(client_ctx, AV_LOG_WARNING, "Failed to set reply_code: %s.\n", av_err2str(ret));
     }
-    
+
     *client = client_http;
     return ret2;
 }
