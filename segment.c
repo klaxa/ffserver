@@ -28,7 +28,7 @@ void segment_save(struct Segment *seg, const char *filename)
 {
     AVFormatContext *ofmt_ctx = NULL;
     int ret;
-    
+
     avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, filename);
     if (!ofmt_ctx) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate output to save Segment %d.\n", seg->id);
@@ -40,7 +40,7 @@ void segment_save(struct Segment *seg, const char *filename)
                 "Could not open output io context to save Segment %d: %s.\n", seg->id, av_err2str(ret));
         return;
     }
-    
+
     avio_write(ofmt_ctx->pb, seg->buf, seg->size);
     avio_flush(ofmt_ctx->pb);
     avio_close(ofmt_ctx->pb);
