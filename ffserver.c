@@ -646,18 +646,10 @@ end:
         }
         av_free(winfos_p[stream_index]);
         av_free(w_threads_p[stream_index]);
-        // pubs[stream_index] could be null if the file could not be opened
+        // pubs[stream_index] could be null if the file could not be opened or mkv was not requested
         if (pubs[stream_index])
             publisher_free(pubs[stream_index]);
     }
-    av_free(rinfos);
-    av_free(winfos_p);
-    av_free(r_threads);
-    av_free(w_threads_p);
-    av_free(pubs);
-    av_free(ifmt_ctxs);
-
-    return NULL;
 
 error_cleanup:
     av_free(rinfos);
