@@ -115,7 +115,7 @@ void publisher_init(struct PublisherContext **pub, char *stream_name);
 void publisher_push_segment(struct PublisherContext *pub, struct Segment *seg);
 
 /**
- * Reserve a slot in the client struct of a PublisherContext. May fail if the number 
+ * Reserve a slot in the client struct of a PublisherContext. May fail if the number
  * of maximum clients has been reached.
  *
  * @param pub pointer to a PublisherContext
