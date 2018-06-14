@@ -42,15 +42,6 @@ enum State {
 };
 
 
-/* struct containing server and client info per client AVIOContext */
-
-struct FFServerInfo {
-    struct HTTPDInterface *httpd;
-    void *server;
-    struct HTTPClient *client;
-};
-
-
 struct Client {
     AVFormatContext *ofmt_ctx; // writable AVFormatContext, basically our tcp connection to the client
     AVFifoBuffer *buffer; // Client buffer of Segment references

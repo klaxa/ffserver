@@ -72,6 +72,15 @@ struct HTTPDInterface {
     void (*shutdown)(void *server);
 };
 
+/* struct containing server and client info per client AVIOContext */
+
+struct FFServerInfo {
+    struct HTTPDInterface *httpd;
+    void *server;
+    struct HTTPClient *client;
+};
+
+
 /** Current HTTPDInterface implementation using lavformat */
 extern struct HTTPDInterface lavfhttpd;
 #endif
