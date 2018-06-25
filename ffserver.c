@@ -86,7 +86,7 @@ void *read_thread(void *arg)
     int video_idx = -1;
     int audio_only = 0;
     int id = 0;
-    int64_t pts, now, start, last_cut = 0;
+    int64_t pts, pts_tmp, dts_tmp, now, start, last_cut = 0;
     int64_t *ts;
     char playlist_dirname[1024];
     char playlist_filename[1024];
@@ -223,13 +223,8 @@ void *read_thread(void *arg)
             pkt.dts = 0;
         }
 
-        pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, tb, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-        pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, tb, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-        pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base, tb);
-        pkt.pos = -1;
-
-        // current pts
-        pts = pkt.pts;
+        // current pts in AV_TIME_BASE
+        pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, tb, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
 
         // current stream "uptime"
         now = av_gettime_relative() - start;
@@ -240,13 +235,6 @@ void *read_thread(void *arg)
             now = av_gettime_relative() - start;
         }
 
-        if (info->pub->stream_formats[FMT_HLS]) {
-            ret = av_write_frame(ofmt_ctx[FMT_HLS], &pkt);
-            if (ret < 0) {
-                fprintf(stderr, "Error muxing packet\n");
-                break;
-            }
-        }
         if (info->pub->stream_formats[FMT_MATROSKA]) {
             // keyframe or first Segment or audio_only and more than AUDIO_ONLY_SEGMENT_SECONDS passed since last cut
             if ((pkt.flags & AV_PKT_FLAG_KEY && pkt.stream_index == video_idx) || !seg ||
@@ -267,21 +255,27 @@ void *read_thread(void *arg)
                 seg->id = id++;
                 av_log(NULL, AV_LOG_DEBUG, "Starting new segment, id: %d\n", seg->id);
             }
-
+            dts_tmp = av_rescale_q_rnd(pkt.dts, in_stream->time_base, tb, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
             ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
-                                (const void *)&pkt.dts);
+                                (const void *)&dts_tmp);
             if (!ts) {
                 av_log(seg->fmt_ctx, AV_LOG_ERROR, "could not write dts\n.");
                 goto end;
             }
 
             ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
-                                (const void *)&pkt.pts);
+                                (const void *)&pts);
             if (!ts) {
                 av_log(seg->fmt_ctx, AV_LOG_ERROR, "could not write pts\n.");
                 goto end;
             }
+            pts_tmp = pkt.pts;
+            dts_tmp = pkt.dts;
+            pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, seg->fmt_ctx->streams[pkt.stream_index]->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+            pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, seg->fmt_ctx->streams[pkt.stream_index]->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
             ret = av_write_frame(seg->fmt_ctx, &pkt);
+            pkt.pts = pts_tmp;
+            pkt.dts = dts_tmp;
             if (ret < 0) {
                 av_log(seg->fmt_ctx, AV_LOG_ERROR, "av_write_frame() failed.\n");
                 goto end;
@@ -311,6 +305,8 @@ void *read_thread(void *arg)
             pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, ofmt_ctx[FMT_HLS]->streams[pkt.stream_index]->time_base,
                                                                AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
             pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, ofmt_ctx[FMT_HLS]->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+            pkt.duration = av_rescale_q_rnd(pkt.duration, in_stream->time_base, ofmt_ctx[FMT_HLS]->streams[pkt.stream_index]->time_base,
                                                                AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
 
             ret = av_write_frame(ofmt_ctx[FMT_HLS], &pkt);
@@ -419,10 +415,11 @@ void write_segment(struct Client *c)
             pkt.pts = av_rescale_q_rnd(seg->ts[pkt_count+1], tb,
                                                         c->ofmt_ctx->streams[pkt.stream_index]->time_base,
                                                                AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+
             pkt.pos = -1;
             pkt_count += 2;
-            ret = av_write_frame(c->ofmt_ctx, &pkt);
-            av_packet_unref(&pkt);
+            ret = av_interleaved_write_frame(c->ofmt_ctx, &pkt);
+            //av_packet_unref(&pkt);
             if (ret < 0) {
                 av_log(fmt_ctx, AV_LOG_ERROR, "write_frame failed, disconnecting client: %d\n", c->id);
                 avformat_close_input(&fmt_ctx);
