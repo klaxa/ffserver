@@ -51,7 +51,9 @@
 
 struct ReadInfo {
     struct PublisherContext *pub;
+    struct StreamConfig *config;
     AVFormatContext *ifmt_ctx;
+    struct FileserverContext *fs;
     char *input_uri;
     char *server_name;
 };
@@ -96,6 +98,10 @@ void *read_thread(void *arg)
     AVStream *in_stream, *out_stream;
     AVRational tb = {1, AV_TIME_BASE};
     AVStream *stream;
+    int stream_formats[FMT_NB] = { 0 };
+
+    for (i = 0; i < info->config->nb_formats; i++)
+        stream_formats[info->config->formats[i]] = 1;
 
     if ((ret = avformat_find_stream_info(ifmt_ctx, NULL)) < 0) {
         av_log(ifmt_ctx, AV_LOG_ERROR, "Could not get input stream info.\n");
@@ -124,9 +130,9 @@ void *read_thread(void *arg)
         }
     }
 
-    if (info->pub->stream_formats[FMT_HLS]) {
-        snprintf(playlist_filename, 1024, "%s/%s/%s_hls.m3u8", info->server_name, info->pub->stream_name,
-                                                                                  info->pub->stream_name);
+    if (stream_formats[FMT_HLS]) {
+        snprintf(playlist_filename, 1024, "%s/%s/%s_hls.m3u8", info->server_name, info->config->stream_name,
+                                                                                  info->config->stream_name);
         avformat_alloc_output_context2(&ofmt_ctx[FMT_HLS], NULL, "hls", playlist_filename);
 
         if (!ofmt_ctx[FMT_HLS]) {
@@ -164,9 +170,9 @@ void *read_thread(void *arg)
         av_log(ofmt_ctx[FMT_HLS], AV_LOG_DEBUG, "Initialized hls.\n");
     }
 
-    if (info->pub->stream_formats[FMT_DASH]) {
-        snprintf(playlist_filename, 1024, "%s/%s/%s_dash.mpd", info->server_name, info->pub->stream_name,
-                                                                                  info->pub->stream_name);
+    if (stream_formats[FMT_DASH]) {
+        snprintf(playlist_filename, 1024, "%s/%s/%s_dash.mpd", info->server_name, info->config->stream_name,
+                                                                                  info->config->stream_name);
         avformat_alloc_output_context2(&ofmt_ctx[FMT_DASH], NULL, "dash", playlist_filename);
 
         if (!ofmt_ctx[FMT_DASH]) {
@@ -235,7 +241,7 @@ void *read_thread(void *arg)
             now = av_gettime_relative() - start;
         }
 
-        if (info->pub->stream_formats[FMT_MATROSKA]) {
+        if (stream_formats[FMT_MATROSKA]) {
             // keyframe or first Segment or audio_only and more than AUDIO_ONLY_SEGMENT_SECONDS passed since last cut
             if ((pkt.flags & AV_PKT_FLAG_KEY && pkt.stream_index == video_idx) || !seg ||
                 (audio_only && pts - last_cut >= AUDIO_ONLY_SEGMENT_SECONDS * AV_TIME_BASE)) {
@@ -282,7 +288,7 @@ void *read_thread(void *arg)
             }
         }
 
-        if (info->pub->stream_formats[FMT_DASH]) {
+        if (stream_formats[FMT_DASH]) {
             pts_tmp = pkt.pts;
             dts_tmp = pkt.dts;
             pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, ofmt_ctx[FMT_DASH]->streams[pkt.stream_index]->time_base,
@@ -301,7 +307,7 @@ void *read_thread(void *arg)
             }
         }
 
-        if (info->pub->stream_formats[FMT_HLS]) {
+        if (stream_formats[FMT_HLS]) {
             pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, ofmt_ctx[FMT_HLS]->streams[pkt.stream_index]->time_base,
                                                                AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
             pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, ofmt_ctx[FMT_HLS]->streams[pkt.stream_index]->time_base,
@@ -322,20 +328,26 @@ void *read_thread(void *arg)
         av_log(seg->fmt_ctx, AV_LOG_ERROR, "Error occurred during read: %s\n", av_err2str(ret));
         goto end;
     }
-
-    segment_close(seg);
-    publisher_push_segment(info->pub, seg);
-    publish(info->pub);
+    if (stream_formats[FMT_MATROSKA]) {
+        segment_close(seg);
+        publisher_push_segment(info->pub, seg);
+        publish(info->pub);
+    }
 
 
 end:
     avformat_close_input(&ifmt_ctx);
-    info->pub->shutdown = 1;
+    if (info->pub)
+        info->pub->shutdown = 1;
     for (i = 0; i < FMT_NB; i++) {
         if (ofmt_ctx[i]) {
             av_write_trailer(ofmt_ctx[i]);
             avformat_free_context(ofmt_ctx[i]);
         }
+    }
+    if (info->fs) {
+        sleep(BUFFER_SECS);
+        info->fs->shutdown = 1;
     }
     return NULL;
 }
@@ -471,11 +483,15 @@ void *accept_thread(void *arg)
             if (info->pubs[i] && !info->pubs[i]->shutdown)
                 shutdown = 0;
         }
+        if (info->fs && !info->fs->shutdown)
+            shutdown = 0;
         if (shutdown)
             break;
         for (i = 0; i < config->nb_streams; i++) {
-            publisher_gen_status_json(info->pubs[i], status);
-            av_log(server, AV_LOG_INFO, status);
+            if (info->pubs[i]) {
+                publisher_gen_status_json(info->pubs[i], status);
+                av_log(server, AV_LOG_INFO, status);
+            }
         }
         client = NULL;
         av_log(server, AV_LOG_DEBUG, "Accepting new clients.\n");
@@ -496,7 +512,7 @@ void *accept_thread(void *arg)
         resource = client->resource;
         snprintf(requested_file, 1024, "%s", resource);
         for (i = 0; i < config->nb_streams; i++) {
-            stream_name = info->pubs[i]->stream_name;
+            stream_name = info->config->streams[i].stream_name;
             //  skip leading '/'  ---v
             if (resource && strlen(resource) > strlen(stream_name)
                 && !strncmp(resource + 1, stream_name, strlen(stream_name))) {
@@ -550,7 +566,7 @@ void *accept_thread(void *arg)
 
 
         // try to serve file
-        if (requested_file[0]) {
+        if (info->fs && requested_file[0]) {
             snprintf(sanitized_file, 1024, "%s", requested_file);
             resource = requested_file;
             while(resource && *resource == '/') {
@@ -811,6 +827,8 @@ void *run_server(void *arg) {
         int stream_formats[FMT_NB] = { 0 };
         rinfo.input_uri = config->streams[stream_index].input_uri;
         rinfo.server_name = config->server_name;
+        rinfo.config = &config->streams[stream_index];
+        rinfo.fs = fs;
 
         for (i = 0; i < config->streams[stream_index].nb_formats; i++)
             stream_formats[config->streams[stream_index].formats[i]] = 1;
@@ -831,6 +849,15 @@ void *run_server(void *arg) {
         rinfo.pub = pub;
 
         rinfos[stream_index] = rinfo;
+
+        ret = pthread_create(&r_thread, NULL, read_thread, &rinfos[stream_index]);
+        if (ret != 0) {
+            pub->shutdown = 1;
+            r_thread = 0;
+            goto end;
+        }
+        r_threads[stream_index] = r_thread;
+
         if (stream_formats[FMT_MATROSKA]) {
             w_threads = av_mallocz_array(pub->nb_threads, sizeof(pthread_t));
             if (!w_threads) {
@@ -856,13 +883,6 @@ void *run_server(void *arg) {
                 }
             }
             w_threads_p[stream_index] = w_threads;
-            ret = pthread_create(&r_thread, NULL, read_thread, &rinfos[stream_index]);
-            if (ret != 0) {
-                pub->shutdown = 1;
-                r_thread = 0;
-                goto end;
-            }
-            r_threads[stream_index] = r_thread;
         }
 
     }
