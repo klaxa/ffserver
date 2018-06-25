@@ -76,7 +76,7 @@ int configs_parse(lua_State *L)
 
     luaL_checktype(L, -1, LUA_TTABLE);
     lua_pushnil(L);
-    
+
     // iterate servers
     while (lua_next(L, -2) != 0) {
         nb_configs++;
@@ -167,7 +167,7 @@ int configs_parse(lua_State *L)
                             lua_pushnumber(L, ++index);
                         }
                         lua_pop(L, 1);
-                            
+
                     } else {
                         fprintf(stderr, "Warning unknown key (%s) in stream configuration.\n", key);
                     }
