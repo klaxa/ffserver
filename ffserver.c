@@ -86,12 +86,12 @@ void *read_thread(void *arg)
     AVStream *in_stream;
     AVRational tb = {1, AV_TIME_BASE};
     AVStream *stream;
-    
+
     if ((ret = avformat_find_stream_info(ifmt_ctx, NULL)) < 0) {
         av_log(ifmt_ctx, AV_LOG_ERROR, "Could not get input stream info.\n");
         goto end;
     }
-    
+
     av_log(ifmt_ctx, AV_LOG_INFO, "Finding video stream.\n");
     for (i = 0; i < ifmt_ctx->nb_streams; i++) {
         av_log(ifmt_ctx, AV_LOG_DEBUG, "Checking stream %d\n", i);
@@ -103,19 +103,19 @@ void *read_thread(void *arg)
     }
     if (video_idx == -1)
         audio_only = 1;
-    
-    
+
+
     // All information needed to start segmenting the file is gathered now.
     // start BUFFER_SECS seconds "in the past" to "catch up" to real-time. Has no effect on streamed sources.
     start = av_gettime_relative() - BUFFER_SECS * AV_TIME_BASE;
-    
+
     // segmenting main-loop
-    
+
     for (;;) {
         ret = av_read_frame(ifmt_ctx, &pkt);
         if (ret < 0)
             break;
-        
+
         in_stream = ifmt_ctx->streams[pkt.stream_index];
         if (pkt.pts == AV_NOPTS_VALUE) {
             pkt.pts = 0;
@@ -123,15 +123,15 @@ void *read_thread(void *arg)
         if (pkt.dts == AV_NOPTS_VALUE) {
             pkt.dts = 0;
         }
-        
+
         pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, tb, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, tb, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base, tb);
         pkt.pos = -1;
-        
+
         // current pts
         pts = pkt.pts;
-        
+
         // current stream "uptime"
         now = av_gettime_relative() - start;
 
@@ -140,7 +140,7 @@ void *read_thread(void *arg)
             usleep(1000);
             now = av_gettime_relative() - start;
         }
-        
+
         // keyframe or first Segment or audio_only and more than AUDIO_ONLY_SEGMENT_SECONDS passed since last cut
         if ((pkt.flags & AV_PKT_FLAG_KEY && pkt.stream_index == video_idx) || !seg ||
             (audio_only && pts - last_cut >= AUDIO_ONLY_SEGMENT_SECONDS * AV_TIME_BASE)) {
@@ -160,14 +160,14 @@ void *read_thread(void *arg)
             seg->id = id++;
             av_log(NULL, AV_LOG_DEBUG, "Starting new segment, id: %d\n", seg->id);
         }
-        
+
         ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
                               (const void *)&pkt.dts);
         if (!ts) {
             av_log(seg->fmt_ctx, AV_LOG_ERROR, "could not write dts\n.");
             goto end;
         }
-        
+
         ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
                               (const void *)&pkt.pts);
         if (!ts) {
@@ -181,7 +181,7 @@ void *read_thread(void *arg)
             goto end;
         }
     }
-    
+
     if (ret < 0 && ret != AVERROR_EOF) {
         av_log(seg->fmt_ctx, AV_LOG_ERROR, "Error occurred during read: %s\n", av_err2str(ret));
         goto end;
@@ -211,19 +211,19 @@ void write_segment(struct Client *c)
         AVPacket pkt;
         struct SegmentReadInfo info;
         unsigned char *avio_buffer;
-        
+
         av_fifo_generic_peek(c->buffer, &seg, sizeof(seg), NULL);
         pthread_mutex_unlock(&c->buffer_lock);
         c->current_segment_id = seg->id;
         info.buf = seg->buf;
         info.left = seg->size;
-        
+
         if (!(fmt_ctx = avformat_alloc_context())) {
             av_log(NULL, AV_LOG_ERROR, "Could not allocate format context\n");
             client_disconnect(c, 0);
             return;
         }
-        
+
         avio_buffer = av_malloc(AV_BUFSIZE);
         if (!avio_buffer) {
             av_log(fmt_ctx, AV_LOG_ERROR, "Could not allocate avio_buffer\n");
@@ -249,7 +249,7 @@ void write_segment(struct Client *c)
             client_disconnect(c, 0);
             return;
         }
-        
+
         ret = avformat_find_stream_info(fmt_ctx, NULL);
         if (ret < 0) {
             av_log(fmt_ctx, AV_LOG_ERROR, "Could not find stream information\n");
@@ -259,14 +259,14 @@ void write_segment(struct Client *c)
             client_disconnect(c, 0);
             return;
         }
-        
+
         av_log(fmt_ctx, AV_LOG_DEBUG, "Client: %d, Segment: %d\n", c->id, seg->id);
 
         for (;;) {
             ret = av_read_frame(fmt_ctx, &pkt);
             if (ret < 0)
                 break;
-            
+
             pkt.dts = av_rescale_q_rnd(seg->ts[pkt_count], tb,
                                                         c->ofmt_ctx->streams[pkt.stream_index]->time_base,
                                                                AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
@@ -379,7 +379,7 @@ void *accept_thread(void *arg)
             info->httpd->close(server, client);
             continue;
         }
-        
+
         avio_buffer = av_malloc(AV_BUFSIZE);
         if (!avio_buffer) {
             av_log(client_ctx, AV_LOG_ERROR, "Could not allocate output format context.\n");
@@ -427,15 +427,15 @@ void *accept_thread(void *arg)
             avio_context_free(&client_ctx);
             av_free(ffinfo);
             continue;
-        }        
+        }
         ofmt_ctx->flags |= AVFMT_FLAG_GENPTS;
         ofmt = ofmt_ctx->oformat;
         ofmt->flags |= AVFMT_NOFILE | AVFMT_FLAG_AUTO_BSF;
-        
+
         for (i = 0; i < ifmt_ctx->nb_streams; i++) {
             in_stream = ifmt_ctx->streams[i];
             out_stream = avformat_new_stream(ofmt_ctx, NULL);
-            
+
             if (!out_stream) {
                 av_log(client, AV_LOG_ERROR, "Could not allocate output stream.\n");
                 publisher_cancel_reserve(pub);
@@ -446,7 +446,7 @@ void *accept_thread(void *arg)
                 av_free(ffinfo);
                 continue;
             }
-            
+
             ret = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
             if (ret < 0) {
                 av_log(client, AV_LOG_ERROR, "Failed to copy context from input to output stream codec context: %s.\n", av_err2str(ret));
@@ -482,7 +482,7 @@ void *accept_thread(void *arg)
         }
         publisher_add_client(pub, ofmt_ctx, ffinfo);
         ofmt_ctx = NULL;
-        
+
     }
     av_log(server, AV_LOG_INFO, "Shutting down http server.\n");
     info->httpd->shutdown(server);
@@ -518,7 +518,7 @@ void *write_thread(void *arg)
         if (info->pub->shutdown && nb_free == MAX_CLIENTS)
             break;
     }
-    
+
     return NULL;
 }
 
@@ -532,7 +532,7 @@ void *run_server(void *arg) {
     int ret, i, stream_index;
     pthread_t *r_threads;
     pthread_t **w_threads_p;
-    
+
     pubs = av_mallocz_array(config->nb_streams, sizeof(struct PublisherContext*));
     if (!pubs) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate publishers\n");
@@ -543,15 +543,15 @@ void *run_server(void *arg) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate input format contexts.\n");
         goto error_cleanup;
     }
-    
+
     av_log_set_level(AV_LOG_INFO);
-    
+
     ainfo.pubs = pubs;
     ainfo.ifmt_ctxs = ifmt_ctxs;
     ainfo.nb_pub = config->nb_streams;
     ainfo.httpd = &lavfhttpd;
     ainfo.config = config;
-    
+
     rinfos = av_mallocz_array(config->nb_streams, sizeof(struct ReadInfo));
     if (!rinfos) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate read infos.\n");
@@ -572,7 +572,7 @@ void *run_server(void *arg) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate write thread handle pointers.\n");
         goto error_cleanup;
     }
-    
+
     for (stream_index = 0; stream_index < config->nb_streams; stream_index++) {
         struct PublisherContext *pub = NULL;
         struct AVFormatContext *ifmt_ctx = NULL;
