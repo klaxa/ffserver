@@ -27,6 +27,9 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <string.h>
 
 #include <libavutil/log.h>
 #include <libavutil/timestamp.h>
@@ -48,6 +51,7 @@ struct ReadInfo {
     struct PublisherContext *pub;
     AVFormatContext *ifmt_ctx;
     char *input_uri;
+    char *server_name;
 };
 
 struct WriteInfo {
@@ -81,9 +85,12 @@ void *read_thread(void *arg)
     int id = 0;
     int64_t pts, now, start, last_cut = 0;
     int64_t *ts;
+    char playlist_dirname[1024];
+    char playlist_filename[1024];
+    AVFormatContext *ofmt_ctx[FMT_NB] = { 0 }; // some may be left unused
     struct Segment *seg = NULL;
     AVPacket pkt;
-    AVStream *in_stream;
+    AVStream *in_stream, *out_stream;
     AVRational tb = {1, AV_TIME_BASE};
     AVStream *stream;
 
@@ -104,6 +111,95 @@ void *read_thread(void *arg)
     if (video_idx == -1)
         audio_only = 1;
 
+    if (stream_formats[FMT_HLS] || stream_formats[FMT_DASH]) {
+        snprintf(playlist_dirname, 1024, "%s/%s", info->server_name, info->config->stream_name);
+        ret = mkdir(playlist_dirname, 0755);
+        if (ret < 0 && errno != EEXIST) {
+            av_log(NULL, AV_LOG_WARNING, "Could not create stream directory (%s) dropping hls/dash\n", strerror(errno));
+            stream_formats[FMT_HLS] = 0;
+            stream_formats[FMT_DASH] = 0;
+        }
+    }
+
+    if (info->pub->stream_formats[FMT_HLS]) {
+        snprintf(playlist_filename, 1024, "%s/%s/%s_hls.m3u8", info->server_name, info->pub->stream_name,
+                                                                                  info->pub->stream_name);
+        avformat_alloc_output_context2(&ofmt_ctx[FMT_HLS], NULL, "hls", playlist_filename);
+
+        if (!ofmt_ctx[FMT_HLS]) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate hls output context.\n");
+            goto end;
+        }
+
+        for (i = 0; i < ifmt_ctx->nb_streams; i++) {
+            in_stream = ifmt_ctx->streams[i];
+            out_stream = avformat_new_stream(ofmt_ctx[FMT_HLS], NULL);
+            if (!out_stream) {
+                av_log(ofmt_ctx[FMT_HLS], AV_LOG_WARNING, "Failed allocating output stream\n");
+                continue;
+            }
+            ret = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
+            if (ret < 0) {
+                av_log(ofmt_ctx[FMT_HLS], AV_LOG_WARNING, "Failed to copy context from input to output stream codec context\n");
+                continue;
+            }
+            out_stream->codecpar->codec_tag = 0;
+            if (out_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+                if (in_stream->sample_aspect_ratio.num)
+                    out_stream->sample_aspect_ratio = in_stream->sample_aspect_ratio;
+                out_stream->avg_frame_rate = in_stream->avg_frame_rate;
+                out_stream->r_frame_rate = in_stream->r_frame_rate;
+            }
+            av_dict_copy(&out_stream->metadata, in_stream->metadata, 0);
+        }
+        av_dict_copy(&ofmt_ctx[FMT_HLS]->metadata, ifmt_ctx->metadata, 0);
+        ret = avformat_write_header(ofmt_ctx[FMT_HLS], NULL);
+        if (ret < 0) {
+            av_log(ofmt_ctx[FMT_HLS], AV_LOG_WARNING, "Error occured while writing header: %s\n", av_err2str(ret));
+        }
+
+        av_log(ofmt_ctx[FMT_HLS], AV_LOG_DEBUG, "Initialized hls.\n");
+    }
+
+    if (info->pub->stream_formats[FMT_DASH]) {
+        snprintf(playlist_filename, 1024, "%s/%s/%s_dash.mpd", info->server_name, info->pub->stream_name,
+                                                                                  info->pub->stream_name);
+        avformat_alloc_output_context2(&ofmt_ctx[FMT_DASH], NULL, "dash", playlist_filename);
+
+        if (!ofmt_ctx[FMT_DASH]) {
+            av_log(NULL, AV_LOG_ERROR, "Could not allocate hls output context.\n");
+            goto end;
+        }
+
+        for (i = 0; i < ifmt_ctx->nb_streams; i++) {
+            in_stream = ifmt_ctx->streams[i];
+            out_stream = avformat_new_stream(ofmt_ctx[FMT_DASH], NULL);
+            if (!out_stream) {
+                av_log(ofmt_ctx[FMT_DASH], AV_LOG_WARNING, "Failed allocating output stream\n");
+                continue;
+            }
+            ret = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
+            if (ret < 0) {
+                av_log(ofmt_ctx[FMT_DASH], AV_LOG_WARNING, "Failed to copy context from input to output stream codec context\n");
+                continue;
+            }
+            out_stream->codecpar->codec_tag = 0;
+            if (out_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+                if (in_stream->sample_aspect_ratio.num)
+                    out_stream->sample_aspect_ratio = in_stream->sample_aspect_ratio;
+                out_stream->avg_frame_rate = in_stream->avg_frame_rate;
+                out_stream->r_frame_rate = in_stream->r_frame_rate;
+            }
+            av_dict_copy(&out_stream->metadata, in_stream->metadata, 0);
+        }
+        av_dict_copy(&ofmt_ctx[FMT_DASH]->metadata, ifmt_ctx->metadata, 0);
+        ret = avformat_write_header(ofmt_ctx[FMT_DASH], NULL);
+        if (ret < 0) {
+            av_log(ofmt_ctx[FMT_DASH], AV_LOG_WARNING, "Error occured while writing header: %s\n", av_err2str(ret));
+        }
+
+        av_log(ofmt_ctx[FMT_DASH], AV_LOG_DEBUG, "Initialized dash.\n");
+    }
 
     // All information needed to start segmenting the file is gathered now.
     // start BUFFER_SECS seconds "in the past" to "catch up" to real-time. Has no effect on streamed sources.
@@ -141,45 +237,86 @@ void *read_thread(void *arg)
             now = av_gettime_relative() - start;
         }
 
-        // keyframe or first Segment or audio_only and more than AUDIO_ONLY_SEGMENT_SECONDS passed since last cut
-        if ((pkt.flags & AV_PKT_FLAG_KEY && pkt.stream_index == video_idx) || !seg ||
-            (audio_only && pts - last_cut >= AUDIO_ONLY_SEGMENT_SECONDS * AV_TIME_BASE)) {
-            if (seg) {
-                segment_close(seg);
-                publisher_push_segment(info->pub, seg);
-                av_log(NULL, AV_LOG_DEBUG, "New segment pushed.\n");
-                publish(info->pub);
-                av_log(NULL, AV_LOG_DEBUG, "Published new segment.\n");
+        if (info->pub->stream_formats[FMT_HLS]) {
+            ret = av_write_frame(ofmt_ctx[FMT_HLS], &pkt);
+            if (ret < 0) {
+                fprintf(stderr, "Error muxing packet\n");
+                break;
             }
-            last_cut = pts;
-            segment_init(&seg, ifmt_ctx);
-            if (!seg) {
-                av_log(NULL, AV_LOG_ERROR, "Segment initialization failed, shutting down.\n");
+        }
+        if (info->pub->stream_formats[FMT_MATROSKA]) {
+            // keyframe or first Segment or audio_only and more than AUDIO_ONLY_SEGMENT_SECONDS passed since last cut
+            if ((pkt.flags & AV_PKT_FLAG_KEY && pkt.stream_index == video_idx) || !seg ||
+                (audio_only && pts - last_cut >= AUDIO_ONLY_SEGMENT_SECONDS * AV_TIME_BASE)) {
+                if (seg) {
+                    segment_close(seg);
+                    publisher_push_segment(info->pub, seg);
+                    av_log(NULL, AV_LOG_DEBUG, "New segment pushed.\n");
+                    publish(info->pub);
+                    av_log(NULL, AV_LOG_DEBUG, "Published new segment.\n");
+                }
+                last_cut = pts;
+                segment_init(&seg, ifmt_ctx);
+                if (!seg) {
+                    av_log(NULL, AV_LOG_ERROR, "Segment initialization failed, shutting down.\n");
+                    goto end;
+                }
+                seg->id = id++;
+                av_log(NULL, AV_LOG_DEBUG, "Starting new segment, id: %d\n", seg->id);
+            }
+
+            ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
+                                (const void *)&pkt.dts);
+            if (!ts) {
+                av_log(seg->fmt_ctx, AV_LOG_ERROR, "could not write dts\n.");
                 goto end;
             }
-            seg->id = id++;
-            av_log(NULL, AV_LOG_DEBUG, "Starting new segment, id: %d\n", seg->id);
+
+            ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
+                                (const void *)&pkt.pts);
+            if (!ts) {
+                av_log(seg->fmt_ctx, AV_LOG_ERROR, "could not write pts\n.");
+                goto end;
+            }
+            ret = av_write_frame(seg->fmt_ctx, &pkt);
+            if (ret < 0) {
+                av_log(seg->fmt_ctx, AV_LOG_ERROR, "av_write_frame() failed.\n");
+                goto end;
+            }
         }
 
-        ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
-                              (const void *)&pkt.dts);
-        if (!ts) {
-            av_log(seg->fmt_ctx, AV_LOG_ERROR, "could not write dts\n.");
-            goto end;
+        if (info->pub->stream_formats[FMT_DASH]) {
+            pts_tmp = pkt.pts;
+            dts_tmp = pkt.dts;
+            pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, ofmt_ctx[FMT_DASH]->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+            pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, ofmt_ctx[FMT_DASH]->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+            pkt.duration = av_rescale_q_rnd(pkt.duration, in_stream->time_base, ofmt_ctx[FMT_DASH]->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+
+            ret = av_write_frame(ofmt_ctx[FMT_DASH], &pkt);
+            pkt.pts = pts_tmp;
+            pkt.dts = dts_tmp;
+            if (ret < 0) {
+                fprintf(stderr, "Error muxing packet\n");
+                break;
+            }
         }
 
-        ts = av_dynarray2_add((void **)&seg->ts, &seg->ts_len, sizeof(int64_t),
-                              (const void *)&pkt.pts);
-        if (!ts) {
-            av_log(seg->fmt_ctx, AV_LOG_ERROR, "could not write pts\n.");
-            goto end;
+        if (info->pub->stream_formats[FMT_HLS]) {
+            pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, ofmt_ctx[FMT_HLS]->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+            pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, ofmt_ctx[FMT_HLS]->streams[pkt.stream_index]->time_base,
+                                                               AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+
+            ret = av_write_frame(ofmt_ctx[FMT_HLS], &pkt);
+            if (ret < 0) {
+                fprintf(stderr, "Error muxing packet\n");
+                break;
+            }
         }
-        ret = av_write_frame(seg->fmt_ctx, &pkt);
         av_packet_unref(&pkt);
-        if (ret < 0) {
-            av_log(seg->fmt_ctx, AV_LOG_ERROR, "av_write_frame() failed.\n");
-            goto end;
-        }
     }
 
     if (ret < 0 && ret != AVERROR_EOF) {
@@ -195,6 +332,12 @@ void *read_thread(void *arg)
 end:
     avformat_close_input(&ifmt_ctx);
     info->pub->shutdown = 1;
+    for (i = 0; i < FMT_NB; i++) {
+        if (ofmt_ctx[i]) {
+            av_write_trailer(ofmt_ctx[i]);
+            avformat_free_context(ofmt_ctx[i]);
+        }
+    }
     return NULL;
 }
 
@@ -338,7 +481,7 @@ void *accept_thread(void *arg)
         av_log(server, AV_LOG_DEBUG, "Accepting new clients.\n");
         reply_code = 200;
 
-        if ((ret = info->httpd->accept(server, &client, reply_code)) < 0) {
+        if ((ret = info->httpd->accept(server, &client, NULL)) < 0) {
             if (ret == HTTPD_LISTEN_TIMEOUT) {
                 continue;
             } else if (ret == HTTPD_CLIENT_ERROR) {
@@ -352,12 +495,23 @@ void *accept_thread(void *arg)
         ifmt_ctx = NULL;
         for (i = 0; i < config->nb_streams; i++) {
             stream_name = info->pubs[i]->stream_name;
-            //           skip leading '/'  ---v
-            if (client->resource && strlen(client->resource)
-                && !strncmp(client->resource + 1, stream_name, strlen(stream_name))) {
-                pub = info->pubs[i];
-                ifmt_ctx = info->ifmt_ctxs[i];
-                break;
+            //  skip leading '/'  ---v
+            if (resource && strlen(resource) > strlen(stream_name)
+                && !strncmp(resource + 1, stream_name, strlen(stream_name))) {
+                resource++;
+                while (resource && *resource++ != '/');
+                if (strlen(resource) > 2 && !strncmp(resource, "mkv", 3)) {
+                    pub = info->pubs[i];
+                    ifmt_ctx = info->ifmt_ctxs[i];
+                    memset(requested_file, 0, 1024);
+                    break;
+                } else if (strlen(resource) > 2 && !strncmp(resource, "hls", 3)) {
+                    snprintf(requested_file, 1024, "/%s/%s_hls.m3u8", stream_name, stream_name);
+                    break;
+                } else if (strlen(resource) > 3 && !strncmp(resource, "dash", 4)) {
+                    snprintf(requested_file, 1024, "/%s/%s_dash.mpd", stream_name, stream_name);
+                    break;
+                }
             }
         }
 
@@ -544,6 +698,23 @@ void *run_server(void *arg) {
         goto error_cleanup;
     }
 
+    for (stream_index = 0; stream_index < config->nb_streams; stream_index++) {
+        for (i = 0; i < config->streams[stream_index].nb_formats; i++)
+            stream_formats[config->streams[stream_index].formats[i]] = 1;
+    }
+
+    if (stream_formats[FMT_HLS] || stream_formats[FMT_DASH]) {
+        fileserver_init(&fs, config->server_name);
+        ret = mkdir(config->server_name, 0755);
+        if (ret < 0 && errno != EEXIST) {
+            av_log(NULL, AV_LOG_WARNING, "Could not create server directory (%d) dropping hls/dash\n", errno);
+            stream_formats[FMT_HLS] = 0;
+            stream_formats[FMT_DASH] = 0;
+            fileserver_free(fs);
+            fs = NULL;
+        }
+    }
+
     av_log_set_level(AV_LOG_INFO);
 
     ainfo.pubs = pubs;
@@ -581,6 +752,7 @@ void *run_server(void *arg) {
         pthread_t *w_threads = NULL;
         pthread_t r_thread;
         rinfo.input_uri = config->streams[stream_index].input_uri;
+        rinfo.server_name = config->server_name;
 
         if ((ret = avformat_open_input(&ifmt_ctx, rinfo.input_uri, NULL, NULL))) {
             av_log(NULL, AV_LOG_ERROR, "run_server: Could not open input\n");
