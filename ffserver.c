@@ -724,7 +724,6 @@ void *fileserver_thread(void *arg)
     struct FileserverClient *c;
     for (;;) {
         usleep(500000);
-        av_log(NULL, AV_LOG_WARNING, "Checking clients, fileserver-thread %s: ", fs->server_name);
         clients_served = 0;
         for (i = 0; i < MAX_CLIENTS; i++) {
             c = &fs->clients[i];
@@ -740,7 +739,7 @@ void *fileserver_thread(void *arg)
             }
             pthread_mutex_unlock(&c->client_lock);
         }
-        av_log(NULL, AV_LOG_WARNING, "%d/%d served\n", clients_served, MAX_CLIENTS);
+        av_log(NULL, AV_LOG_INFO, "Checked clients, fileserver-thread %s %d/%d served\n", fs->server_name, clients_served, MAX_CLIENTS);
         if (fs->shutdown) {
             printf("shutting down\n");
             break;
