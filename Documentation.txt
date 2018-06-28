@@ -12,13 +12,18 @@ the server is currently reading (including the short buffer).
 The stream received by the clients is simply an HTTP response to an HTTP
 request.
 
+HLS and DASH streaming are also supported. The corresponding files are written
+to directories corresponding to the server and stream name. A fileserver thread
+is started on a per-server basis depending on whether HLS or DASH was requested.
+
 
 Documentation
 -------------
 
-The current implementation has three different types of work that is done in
+The current implementation has four different types of work that is done in
 different threads. These types are: reading a stream, accepting HTTP
-connections and writing media data to clients.
+connections and writing media data to clients. This is split into serving
+static files and serving dynamic matroska content.
 
 The design tries to follow a Publisher-Subscriber-Pattern. The PublisherContext
 struct contains buffers of read media data and the list of clients. Clients
@@ -56,7 +61,7 @@ The HTTPDInterface struct takes the following function pointers:
 struct HTTPDInterface {
     int (*init)  (void **server, struct HTTPDConfig config);
     int (*free)  (void *server);
-    int (*accept)(void *server, struct HTTPClient **client, int reply_code);
+    int (*accept)(void *server, struct HTTPClient **client, const char **valid_files);
     int (*write) (void *server, struct HTTPClient *client, const unsigned char *buf, int size);
     int (*read)  (void *server, struct HTTPClient *client, unsigned char *buf, int size);
     void (*close)(void *server, struct HTTPClient *client);
@@ -72,9 +77,10 @@ read and where to serve them. A sample config is supplied as sample_config.lua.
 This sample config defines two servers with a total of three streams. The first
 server serves two streams on all interfaces on port 8080, while the second
 server serves one stream on 127.0.0.1. The streams can be received by
-requesting the configured stream name as the GET parameter in the HTTP request.
-In the sample config, this would be "http://<server_address>:8080/default_stream"
-for the first stream.
+requesting the stream and the desired format as the GET parameter of the request
+in the form of: /<stream_name>/<format>
+In the sample config, this would be "http://<server_address>:8080/default_stream/mkv"
+for the first stream. Other formats are "hls" and "dash".
 
 The stream is read in real time from whatever resource it is retrieved.
 Currently a maximum of 16 clients is implemented.
