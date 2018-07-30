@@ -578,6 +578,11 @@ void *accept_thread(void *arg)
             continue;
         }
 
+        if (!info->fs && requested_file[0]) {
+            info->httpd->close(server, client);
+            continue;
+        }
+
         avio_buffer = av_malloc(AV_BUFSIZE);
         if (!avio_buffer) {
             av_log(client_ctx, AV_LOG_ERROR, "Could not allocate output format context.\n");
