@@ -54,7 +54,8 @@ HTTPD-API
 
 To be independent of a specific http server implementation, an interface is
 provided that an http server implementation has to provide. At the time of
-writing an implementation using the libavformat http server is provided.
+writing an implementation using the libavformat http server and an
+implementation using the libmicrotthpd library are provided.
 
 The HTTPDInterface struct takes the following function pointers:
 
