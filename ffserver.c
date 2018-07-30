@@ -490,11 +490,11 @@ void *accept_thread(void *arg)
         for (i = 0; i < config->nb_streams; i++) {
             if (info->pubs[i]) {
                 publisher_gen_status_json(info->pubs[i], status);
-                av_log(server, AV_LOG_INFO, status);
+                av_log(NULL, AV_LOG_INFO, status);
             }
         }
         client = NULL;
-        av_log(server, AV_LOG_DEBUG, "Accepting new clients.\n");
+        av_log(NULL, AV_LOG_DEBUG, "Accepting new clients.\n");
         reply_code = 200;
 
         if ((ret = info->httpd->accept(server, &client, NULL)) < 0) {
@@ -503,7 +503,7 @@ void *accept_thread(void *arg)
             } else if (ret == HTTPD_CLIENT_ERROR) {
                 info->httpd->close(server, client);
             }
-            av_log(server, AV_LOG_WARNING, "Error during accept, retrying.\n");
+            av_log(NULL, AV_LOG_WARNING, "Error during accept, retrying.\n");
             continue;
         }
 
@@ -666,7 +666,7 @@ void *accept_thread(void *arg)
         ofmt_ctx->pb = client_ctx;
         ret = avformat_write_header(ofmt_ctx, &mkvopts);
         if (ret < 0) {
-            av_log(client, AV_LOG_ERROR, "Could not write header to client: %s.\n", av_err2str(ret));
+            av_log(client_ctx, AV_LOG_ERROR, "Could not write header to client: %s.\n", av_err2str(ret));
             publisher_cancel_reserve(pub);
             info->httpd->close(server, client);
             avformat_free_context(ofmt_ctx);
@@ -679,7 +679,7 @@ void *accept_thread(void *arg)
         ofmt_ctx = NULL;
 
     }
-    av_log(server, AV_LOG_INFO, "Shutting down http server.\n");
+    av_log(NULL, AV_LOG_INFO, "Shutting down http server.\n");
     info->httpd->shutdown(server);
     av_log(NULL, AV_LOG_INFO, "Shut down http server.\n");
     return NULL;
