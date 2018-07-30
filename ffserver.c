@@ -45,7 +45,7 @@
 #include "httpd.h"
 #include "configreader.h"
 
-#define BUFFER_SECS 30
+#define BUFFER_SECS 10
 #define LISTEN_TIMEOUT_MSEC 1000
 #define AUDIO_ONLY_SEGMENT_SECONDS 2
 
