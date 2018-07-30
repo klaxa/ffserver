@@ -49,7 +49,6 @@ void fileserver_schedule(struct FileserverContext *fs, struct FFServerInfo *ffin
             fsc->buf = NULL;
             fsc->size = 0;
         }
-        fsc->ofmt_ctx = ofmt_ctx;
         pthread_mutex_unlock(&fsc->client_lock);
     } else {
         av_log(NULL, AV_LOG_WARNING, "Could not find free client slot.\n");

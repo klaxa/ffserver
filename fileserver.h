@@ -45,7 +45,7 @@ struct FileserverContext {
  * @param ffinfo pointer to an FFServerInfo struct containing information for serving the file
  * @param filename filename of the file to serve
  */
-void fileserver_schedule(struct FileserverContext *fs, struct FFServerInfo *ffinfo, AVIOContext *ofmt_ctx, const char *filename);
+void fileserver_schedule(struct FileserverContext *fs, struct FFServerInfo *ffinfo, const char *filename);
 
 /**
  * Initialize a Fileservercontext
