@@ -797,7 +797,7 @@ void *run_server(void *arg) {
     ainfo.fs = fs;
     ainfo.ifmt_ctxs = ifmt_ctxs;
     ainfo.nb_pub = config->nb_streams;
-    ainfo.httpd = &lavfhttpd;
+    ainfo.httpd = &lmhttpd;
     ainfo.config = config;
 
     rinfos = av_mallocz_array(config->nb_streams, sizeof(struct ReadInfo));

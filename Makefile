@@ -1,11 +1,12 @@
 all: ffserver
 LAV_FLAGS = $(shell pkg-config --libs --cflags libavformat libavcodec libavutil)
 LUA_FLAGS = $(shell pkg-config --libs --cflags lua5.3)
+MHD_FLAGS = $(shell pkg-config --libs --cflags libmicrohttpd)
 CFLAGS=-fsanitize=address -fsanitize=undefined
 # LAV_FLAGS = -L/usr/local/lib -lavcodec -lavformat -lavutil
 
-ffserver: segment.o publisher.o fileserver.o lavfhttpd.o configreader.o ffserver.c
-	cc -g -Wall $(CFLAGS) $(LAV_FLAGS) $(LUA_FLAGS) -lpthread -o ffserver segment.o publisher.o fileserver.o lavfhttpd.o configreader.o ffserver.c
+ffserver: segment.o publisher.o fileserver.o lavfhttpd.o lmhttpd.o configreader.o ffserver.c
+	cc -g -Wall $(CFLAGS) $(LAV_FLAGS) $(LUA_FLAGS) $(MHD_FLAGS) -lpthread -o ffserver segment.o publisher.o fileserver.o lavfhttpd.o lmhttpd.o configreader.o ffserver.c
 
 segment.o: segment.c segment.h
 	cc -g -Wall $(CFLAGS) $(LAV_FLAGS) -lpthread -c segment.c
@@ -18,6 +19,9 @@ fileserver.o: fileserver.c fileserver.h
 
 lavfhttpd.o: lavfhttpd.c httpd.h
 	cc -g -Wall $(CFLAGS) $(LAV_FLAGS) -lpthread -c lavfhttpd.c
+
+lmhttpd.o: lmhttpd.c httpd.h
+	cc -g -Wall $(CFLAGS) $(LAV_FLAGS) $(MHD_FLAGS) -lpthread -c lmhttpd.c
 
 configreader.o: configreader.c configreader.h httpd.h
 	cc -g -Wall $(CFLAGS) $(LAV_FLAGS) $(LUA_FLAGS) -c configreader.c

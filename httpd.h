@@ -83,4 +83,5 @@ struct FFServerInfo {
 
 /** Current HTTPDInterface implementation using lavformat */
 extern struct HTTPDInterface lavfhttpd;
+extern struct HTTPDInterface lmhttpd;
 #endif
