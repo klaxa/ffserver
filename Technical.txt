@@ -1,0 +1,73 @@
+General
+-------
+
+A server instance is performing four different tasks:
+  - accept connections
+  - read input and mux it
+  - write to live clients (matroska)
+  - serve files for pseudo-live clients (HLS/DASH)
+
+These tasks are worked on by separate threads, using locked FIFOs to pass data
+between them.
+
+Accepting connections is trivial: Accept a new client and decide whether to
+it to the live clients (matroska) or schedule serving a file (HLS/DASH). If
+the request is not understood the client is disconnected.
+
+The thread reading the configured input, demuxes it and then either muxes it to
+disk in case of HLS and DASH or into in-memory matroska files that each store
+one streamable segment.
+
+The thread writing to the clients iterates through all available clients and
+checks its state. If data can be written, the thread takes care of writing it
+to the client.
+
+The file serving thread is trivially serving files. Access is sanitized to some
+extent, although there may still be ways to exploit it.
+
+
+Architecture
+------------
+
+The more complex problem of actual live streaming instead of pseudo-live
+streaming required two things:
+  - splitting the video into segments, each at which live streaming can be
+    started
+  - mux starting at a segment and concatenating all other chunks when a new
+    client connects
+
+To achieve this a Publisher-Subscriber-Pattern has been employed.
+
+A reader thread enqueues newly read segments to a Publisher. This Publisher
+adds these segments to queues in subscribed Clients. Once a writer thread
+writes a segment to a Client the segment is dequeued. If a Client's queue
+has no more space for new segments, these are not added, but the Client is
+not disconnected.
+
+The generated in-memory segments are refcounted and thus are stored only once.
+Once generated, only pointers to it are ever communicated between threads
+through queues. If the refcount drops to zero, it is freed.
+
+
+HTTPD-API
+---------
+
+To be independent of a specific http server implementation, an interface is
+provided that an http server implementation has to provide. At the time of
+writing an implementation using the libavformat http server and an
+implementation using the libmicrotthpd library are provided.
+
+The HTTPDInterface struct takes the following function pointers:
+
+struct HTTPDInterface {
+    int (*init)  (void **server, struct HTTPDConfig config);
+    int (*free)  (void *server);
+    int (*accept)(void *server, struct HTTPClient **client, const char **valid_files);
+    int (*write) (void *server, struct HTTPClient *client, const unsigned char *buf, int size);
+    int (*read)  (void *server, struct HTTPClient *client, unsigned char *buf, int size);
+    void (*close)(void *server, struct HTTPClient *client);
+    void (*shutdown)(void *server);
+};
+
+While a read-function is present in the API, it is not used yet, but it could
+be employed for new features.
