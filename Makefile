@@ -2,7 +2,8 @@ all: ffserver
 LAV_FLAGS = $(shell pkg-config --libs --cflags libavformat libavcodec libavutil)
 LUA_FLAGS = $(shell pkg-config --libs --cflags lua5.3)
 MHD_FLAGS = $(shell pkg-config --libs --cflags libmicrohttpd)
-CFLAGS=-fsanitize=address -fsanitize=undefined
+# CFLAGS=-fsanitize=address -fsanitize=undefined
+CFLAGS=
 # LAV_FLAGS = -L/usr/local/lib -lavcodec -lavformat -lavutil
 
 ffserver: segment.o publisher.o fileserver.o lavfhttpd.o lmhttpd.o configreader.o ffserver.c
