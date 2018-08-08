@@ -49,6 +49,8 @@
 #define LISTEN_TIMEOUT_MSEC 1000
 #define AUDIO_ONLY_SEGMENT_SECONDS 2
 
+
+/** Information needed for a read thread */
 struct ReadInfo {
     struct PublisherContext *pub;
     struct StreamConfig *config;
@@ -58,11 +60,13 @@ struct ReadInfo {
     char *server_name;
 };
 
+/** Information needed for a write thread */
 struct WriteInfo {
     struct PublisherContext *pub;
     int thread_id;
 };
 
+/** Information needed for an accept thread, currently this runs on the main thread */
 struct AcceptInfo {
     struct PublisherContext **pubs;
     struct HTTPDInterface *httpd;
@@ -73,6 +77,7 @@ struct AcceptInfo {
 };
 
 
+/** Map avio write callback to httpd write callback */
 int ffserver_write(void *opaque, unsigned char *buf, int buf_size)
 {
     struct FFServerInfo *info = (struct FFServerInfo*) opaque;
@@ -80,6 +85,7 @@ int ffserver_write(void *opaque, unsigned char *buf, int buf_size)
 }
 
 
+/** Read a file and feed it into publishers and other muxers */
 void *read_thread(void *arg)
 {
     struct ReadInfo *info = (struct ReadInfo*) arg;
@@ -352,6 +358,8 @@ end:
     return NULL;
 }
 
+
+/** Write a segment to a client (mkv only). This muxes the input for the client */
 void write_segment(struct Client *c)
 {
     struct Segment *seg;
@@ -455,6 +463,8 @@ void write_segment(struct Client *c)
     }
 }
 
+
+/** Accept new clients and add them to the publisher or serve files */
 void *accept_thread(void *arg)
 {
     struct AcceptInfo *info = (struct AcceptInfo*) arg;
@@ -685,6 +695,8 @@ void *accept_thread(void *arg)
     return NULL;
 }
 
+
+/** Check clients and write data to them if possible */
 void *write_thread(void *arg)
 {
     struct WriteInfo *info = (struct WriteInfo*) arg;
@@ -749,6 +761,8 @@ void *fileserver_thread(void *arg)
     return NULL;
 }
 
+
+/** Run a server given a HTTPDConfiguration */
 void *run_server(void *arg) {
     struct AcceptInfo ainfo;
     struct ReadInfo *rinfos;
