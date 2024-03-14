@@ -25,6 +25,7 @@
 #include <libavutil/log.h>
 #include <libavutil/file.h>
 #include <libavutil/error.h>
+#include <libavutil/mem.h>
 
 void fileserver_schedule(struct FileserverContext *fs, struct FFServerInfo *ffinfo, const char *filename)
 {
