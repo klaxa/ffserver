@@ -777,12 +777,12 @@ void *run_server(void *arg) {
     pthread_t **w_threads_p;
     pthread_t fs_thread = 0;
 
-    pubs = av_mallocz_array(config->nb_streams, sizeof(struct PublisherContext*));
+    pubs = (struct PublisherContext **) av_calloc(config->nb_streams, sizeof(struct PublisherContext*));
     if (!pubs) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate publishers\n");
         goto error_cleanup;
     }
-    ifmt_ctxs = av_mallocz_array(config->nb_streams, sizeof(AVFormatContext*));
+    ifmt_ctxs = (AVFormatContext **) av_calloc(config->nb_streams, sizeof(AVFormatContext*));
     if (!ifmt_ctxs) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate input format contexts.\n");
         goto error_cleanup;
@@ -814,22 +814,22 @@ void *run_server(void *arg) {
     ainfo.httpd = &lmhttpd;
     ainfo.config = config;
 
-    rinfos = av_mallocz_array(config->nb_streams, sizeof(struct ReadInfo));
+    rinfos = (struct ReadInfo *) av_calloc(config->nb_streams, sizeof(struct ReadInfo));
     if (!rinfos) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate read infos.\n");
         goto error_cleanup;
     }
-    winfos_p = av_mallocz_array(config->nb_streams, sizeof(struct WriteInfo*));
+    winfos_p = av_calloc(config->nb_streams, sizeof(struct WriteInfo*));
     if (!winfos_p) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate write info pointers.\n");
         goto error_cleanup;
     }
-    r_threads = av_mallocz_array(config->nb_streams, sizeof(pthread_t));
+    r_threads = (pthread_t *) av_calloc(config->nb_streams, sizeof(pthread_t));
     if (!r_threads) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate read thread handles.\n");
         goto error_cleanup;
     }
-    w_threads_p = av_mallocz_array(config->nb_streams, sizeof(pthread_t*));
+    w_threads_p = (pthread_t **) av_calloc(config->nb_streams, sizeof(pthread_t*));
     if (!w_threads_p) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate write thread handle pointers.\n");
         goto error_cleanup;
@@ -877,12 +877,12 @@ void *run_server(void *arg) {
         r_threads[stream_index] = r_thread;
 
         if (stream_formats[FMT_MATROSKA]) {
-            w_threads = av_mallocz_array(pub->nb_threads, sizeof(pthread_t));
+            w_threads = (pthread_t *) av_calloc(pub->nb_threads, sizeof(pthread_t));
             if (!w_threads) {
                 av_log(NULL, AV_LOG_ERROR, "Could not allocate write thread handles.\n");
                 continue;
             }
-            winfos = av_mallocz_array(pub->nb_threads, sizeof(struct WriteInfo));
+            winfos = (struct WriteInfo *) av_calloc(pub->nb_threads, sizeof(struct WriteInfo));
             if (!winfos) {
                 av_log(NULL, AV_LOG_ERROR, "Could not allocate write infos.\n");
                 continue;
@@ -969,7 +969,7 @@ int main(int argc, char *argv[])
         printf("No valid configurations parsed.\n");
         return 1;
     }
-    server_threads = av_mallocz_array(nb_configs, sizeof(pthread_t));
+    server_threads = (pthread_t *) av_calloc(nb_configs, sizeof(pthread_t));
     if (!server_threads) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate server thread handles.\n");
         return AVERROR(ENOMEM);
