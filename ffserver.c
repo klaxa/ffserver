@@ -478,7 +478,6 @@ void *accept_thread(void *arg)
     AVFormatContext *ofmt_ctx = NULL;
     AVFormatContext *ifmt_ctx;
     unsigned char *avio_buffer;
-    AVOutputFormat *ofmt;
     AVDictionary *mkvopts = NULL;
     AVStream *in_stream, *out_stream;
     int ret, i, reply_code;
@@ -633,9 +632,7 @@ void *accept_thread(void *arg)
             av_free(ffinfo);
             continue;
         }
-        ofmt_ctx->flags |= AVFMT_FLAG_GENPTS;
-        ofmt = ofmt_ctx->oformat;
-        ofmt->flags |= AVFMT_NOFILE | AVFMT_FLAG_AUTO_BSF;
+        ofmt_ctx->flags |= AVFMT_FLAG_GENPTS | AVFMT_FLAG_AUTO_BSF;
 
         for (i = 0; i < ifmt_ctx->nb_streams; i++) {
             in_stream = ifmt_ctx->streams[i];

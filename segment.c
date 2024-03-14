@@ -120,7 +120,7 @@ void segment_init(struct Segment **seg_p, AVFormatContext *fmt)
         return;
     }
 
-    seg->ifmt = av_find_input_format("matroska");
+    seg->ifmt = (AVInputFormat *) av_find_input_format("matroska");
     seg->fmt_ctx = NULL;
     seg->nb_read = 0;
     seg->size = 0;
@@ -154,8 +154,7 @@ void segment_init(struct Segment **seg_p, AVFormatContext *fmt)
         av_log(seg->fmt_ctx, AV_LOG_WARNING, "Could not set flush_packets!\n");
     }
 
-    seg->fmt_ctx->flags |= AVFMT_FLAG_GENPTS;
-    seg->fmt_ctx->oformat->flags |= AVFMT_NOFILE | AVFMT_FLAG_AUTO_BSF;
+    seg->fmt_ctx->flags |= AVFMT_FLAG_GENPTS | AVFMT_FLAG_AUTO_BSF;
 
     av_log(seg->fmt_ctx, AV_LOG_DEBUG, "Initializing segment\n");
 

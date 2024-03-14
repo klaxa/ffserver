@@ -32,7 +32,7 @@ struct Segment {
     unsigned char *buf;
     AVIOContext *io_ctx;
     AVFormatContext *fmt_ctx;
-    AVInputFormat *ifmt;
+    const AVInputFormat *ifmt;
     size_t size;
     int64_t *ts;
     int ts_len;
