@@ -19,6 +19,7 @@
 #include "fileserver.h"
 #include "httpd.h"
 
+#include <stdio.h>
 #include <pthread.h>
 
 #include <libavutil/log.h>
