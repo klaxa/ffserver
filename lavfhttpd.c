@@ -119,11 +119,11 @@ int lavfhttpd_accept(void *server, struct HTTPClient **client, const char **vali
 int lavfhttpd_write(void *server, struct HTTPClient *client, const unsigned char *buf, int size)
 {
     AVIOContext *client_ctx = (AVIOContext*) client->httpd_data;
-    int64_t old_written = client_ctx->written;
+    int64_t old_written = client_ctx->bytes_written;
     int64_t actual_written;
     avio_write(client_ctx, buf, size);
     avio_flush(client_ctx);
-    actual_written = client_ctx->written - old_written;
+    actual_written = client_ctx->bytes_written - old_written;
     if (actual_written < size) {
         return AVERROR_EOF;
     }
