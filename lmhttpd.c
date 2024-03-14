@@ -34,6 +34,7 @@
 
 #include <libavutil/log.h>
 #include <libavutil/fifo.h>
+#include <libavutil/mem.h>
 
 #include "httpd.h"
 
