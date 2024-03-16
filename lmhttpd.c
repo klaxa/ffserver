@@ -91,7 +91,7 @@ static void free_callback_param (void *cls)
  * Incoming connections are initialized and added to a queue of new clients.
  */
 
-static int answer_to_connection (void *cls, struct MHD_Connection *connection,
+static enum MHD_Result answer_to_connection (void *cls, struct MHD_Connection *connection,
                       const char *url, const char *method,
                       const char *version, const char *upload_data,
                       size_t *upload_data_size, void **con_cls)
