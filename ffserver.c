@@ -367,14 +367,14 @@ void write_segment(struct Client *c)
     int pkt_count = 0;
     AVRational tb = {1, AV_TIME_BASE};
     pthread_mutex_lock(&c->buffer_lock);
-    if (av_fifo_size(c->buffer) > 0) {
+    if (av_fifo_can_read(c->buffer)) {
         AVFormatContext *fmt_ctx;
         AVIOContext *avio_ctx;
         AVPacket pkt;
         struct SegmentReadInfo info;
         unsigned char *avio_buffer;
 
-        av_fifo_generic_peek(c->buffer, &seg, sizeof(seg), NULL);
+        av_fifo_peek(c->buffer, &seg, 1, 0);
         pthread_mutex_unlock(&c->buffer_lock);
         c->current_segment_id = seg->id;
         info.buf = seg->buf;
@@ -453,7 +453,7 @@ void write_segment(struct Client *c)
         avformat_close_input(&fmt_ctx);
         avio_context_free(&avio_ctx);
         pthread_mutex_lock(&c->buffer_lock);
-        av_fifo_drain(c->buffer, sizeof(seg));
+        av_fifo_drain2(c->buffer, 1);
         pthread_mutex_unlock(&c->buffer_lock);
         segment_unref(seg);
         client_set_state(c, WRITABLE);

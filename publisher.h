@@ -44,7 +44,7 @@ enum State {
 
 struct Client {
     AVFormatContext *ofmt_ctx; // writable AVFormatContext, basically our tcp connection to the client
-    AVFifoBuffer *buffer; // Client buffer of Segment references
+    AVFifo *buffer; // Client buffer of Segment references
     char *method;
     char *resource;
     struct FFServerInfo *ffinfo;
@@ -57,8 +57,8 @@ struct Client {
 
 struct PublisherContext {
     struct Client clients[MAX_CLIENTS]; // currently compile-time configuration, easly made dynamic with malloc?
-    AVFifoBuffer *buffer; // publisher buffer for new Segments
-    AVFifoBuffer *fs_buffer; // fast start buffer
+    AVFifo *buffer; // publisher buffer for new Segments
+    AVFifo *fs_buffer; // fast start buffer
     pthread_mutex_t buffer_lock;
     pthread_mutex_t fs_buffer_lock;
     int nb_threads;

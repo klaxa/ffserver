@@ -62,8 +62,8 @@ void client_disconnect(struct Client *c, int write_trailer)
     c->ofmt_ctx = NULL;
     c->ffinfo = NULL;
     pthread_mutex_lock(&c->buffer_lock);
-    while(av_fifo_size(c->buffer)) {
-        av_fifo_generic_read(c->buffer, &seg, sizeof(struct Segment*), NULL);
+    while(av_fifo_can_read(c->buffer)) {
+        av_fifo_read(c->buffer, &seg, 1);
         segment_unref(seg);
     }
     pthread_mutex_unlock(&c->buffer_lock);
@@ -81,14 +81,14 @@ void client_set_state(struct Client *c, enum State state)
 void client_push_segment(struct Client *c, struct Segment *seg)
 {
     pthread_mutex_lock(&c->buffer_lock);
-    if (av_fifo_space(c->buffer) == 0) {
+    if (av_fifo_can_write(c->buffer) == 0) {
         av_log(NULL, AV_LOG_WARNING, "Client buffer full, dropping Segment.\n");
         client_set_state(c, BUFFER_FULL);
         pthread_mutex_unlock(&c->buffer_lock);
         return;
     }
     segment_ref(seg);
-    av_fifo_generic_write(c->buffer, &seg, sizeof(struct Segment*), NULL);
+    av_fifo_write(c->buffer, &seg, 1);
     pthread_mutex_unlock(&c->buffer_lock);
     client_set_state(c, WRITABLE);
 }
@@ -105,16 +105,16 @@ void publisher_init(struct PublisherContext **pub, char *stream_name)
     pc->stream_name = stream_name;
     pc->current_segment_id = -1;
     pc->shutdown = 0;
-    pc->buffer = av_fifo_alloc_array(sizeof(struct Segment), MAX_SEGMENTS);
+    pc->buffer = av_fifo_alloc2(MAX_SEGMENTS, sizeof(struct Segment*), 0);
     if (!pc->buffer) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate publisher buffer.\n");
         av_free(pc);
         return;
     }
-    pc->fs_buffer = av_fifo_alloc_array(sizeof(struct Segment), MAX_SEGMENTS);
+    pc->fs_buffer = av_fifo_alloc2(MAX_SEGMENTS, sizeof(struct Segment*), 0);
     if (!pc->fs_buffer) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate publisher fast-start buffer.\n");
-        av_fifo_free(pc->buffer);
+        av_fifo_freep2(&pc->buffer);
         av_free(pc);
         return;
     }
@@ -122,7 +122,7 @@ void publisher_init(struct PublisherContext **pub, char *stream_name)
     pthread_mutex_init(&pc->fs_buffer_lock, NULL);
     for (i = 0; i < MAX_CLIENTS; i++) {
         struct Client *c = &pc->clients[i];
-        c->buffer = av_fifo_alloc_array(sizeof(struct Segment), MAX_SEGMENTS);
+        c->buffer = av_fifo_alloc2(MAX_SEGMENTS, sizeof(struct Segment*), 0);
         if (!c->buffer) {
             av_log(NULL, AV_LOG_ERROR, "Could not allocate client buffer.\n");
             publisher_free(pc);
@@ -144,13 +144,13 @@ void publisher_push_segment(struct PublisherContext *pub, struct Segment *seg)
     struct Segment *drop;
     pthread_mutex_lock(&pub->buffer_lock);
     pthread_mutex_lock(&pub->fs_buffer_lock);
-    av_fifo_generic_write(pub->buffer, &seg, sizeof(struct Segment*), NULL);
+    av_fifo_write(pub->buffer, &seg, 1);
     segment_ref(seg);
-    if (av_fifo_size(pub->fs_buffer) >= BUFFER_SEGMENTS * sizeof(struct Segment*)) {
-        av_fifo_generic_read(pub->fs_buffer, &drop, sizeof(struct Segment*), NULL);
+    if (av_fifo_can_read(pub->fs_buffer) >= BUFFER_SEGMENTS) {
+        av_fifo_read(pub->fs_buffer, &drop, 1);
         segment_unref(drop);
     }
-    av_fifo_generic_write(pub->fs_buffer, &seg, sizeof(struct Segment*), NULL);
+    av_fifo_write(pub->fs_buffer, &seg, 1);
     pthread_mutex_unlock(&pub->buffer_lock);
     pthread_mutex_unlock(&pub->fs_buffer_lock);
     segment_ref(seg);
@@ -192,9 +192,9 @@ void client_push_prebuffer(struct PublisherContext *pub, struct Client *c)
     int size;
     struct Segment *seg;
     pthread_mutex_lock(&pub->fs_buffer_lock);
-    size = av_fifo_size(pub->fs_buffer);
-    for (off = 0; off < size; off += sizeof(struct Segment*)) {
-        av_fifo_generic_peek_at(pub->fs_buffer, &seg, off, sizeof(struct Segment*), NULL);
+    size = av_fifo_can_read(pub->fs_buffer);
+    for (off = 0; off < size; off++) {
+        av_fifo_peek(pub->fs_buffer, &seg, 1, off);
         client_push_segment(c, seg);
     }
     pthread_mutex_unlock(&pub->fs_buffer_lock);
@@ -222,21 +222,21 @@ void publisher_free(struct PublisherContext *pub)
     int i;
     struct Segment *seg;
     pthread_mutex_lock(&pub->buffer_lock);
-    while(av_fifo_size(pub->buffer)) {
-        av_fifo_generic_read(pub->buffer, &seg, sizeof(struct Segment*), NULL);
+    while(av_fifo_can_read(pub->buffer)) {
+        av_fifo_read(pub->buffer, &seg, 1);
         segment_unref(seg);
     }
-    av_fifo_freep(&pub->buffer);
+    av_fifo_freep2(&pub->buffer);
     pthread_mutex_unlock(&pub->buffer_lock);
-    
+
     pthread_mutex_lock(&pub->fs_buffer_lock);
-    while(av_fifo_size(pub->fs_buffer)) {
-        av_fifo_generic_read(pub->fs_buffer, &seg, sizeof(struct Segment*), NULL);
+    while(av_fifo_can_read(pub->fs_buffer)) {
+        av_fifo_read(pub->fs_buffer, &seg, 1);
         segment_unref(seg);
     }
-    av_fifo_freep(&pub->fs_buffer);
+    av_fifo_freep2(&pub->fs_buffer);
     for (i = 0; i < MAX_CLIENTS; i++) {
-        av_fifo_freep(&pub->clients[i].buffer);
+        av_fifo_freep2(&pub->clients[i].buffer);
     }
     pthread_mutex_unlock(&pub->fs_buffer_lock);
     av_free(pub);
@@ -256,18 +256,18 @@ void publish(struct PublisherContext *pub)
     struct Segment *seg;
     char filename[128] = {0};
     pthread_mutex_lock(&pub->buffer_lock);
-    av_log(NULL, AV_LOG_DEBUG, "pub->buffer size: %d\n", av_fifo_size(pub->buffer));
-    if (av_fifo_size(pub->buffer) == 0) {
+    av_log(NULL, AV_LOG_DEBUG, "pub->buffer size: %ld\n", av_fifo_can_read(pub->buffer));
+    if (av_fifo_can_read(pub->buffer) == 0) {
         pthread_mutex_unlock(&pub->buffer_lock);
         return;
     }
-    av_fifo_generic_read(pub->buffer, &seg, sizeof(struct Segment*), NULL);
+    av_fifo_read(pub->buffer, &seg, 1);
     pthread_mutex_unlock(&pub->buffer_lock);
     if (seg) {
         pub->current_segment_id = seg->id;
         snprintf(filename, 127, "segment-%04d.mkv", seg->id);
 //        segment_save(seg, filename);
-        
+
         for (i = 0; i < MAX_CLIENTS; i++) {
             switch(pub->clients[i].state) {
                 case BUFFER_FULL:
@@ -304,7 +304,7 @@ void publisher_gen_status_json(struct PublisherContext *pub, char *status)
         }
         states[c->state]++;
     }
-    
+
 
     snprintf(status, 4095,
     "{\n\t\"free\": %d,\n"

@@ -40,11 +40,11 @@
 
 struct MHDServer {
     struct MHD_Daemon *daemon;
-    AVFifoBuffer *clients;
+    AVFifo *clients;
 };
 
 struct ConnectionInfo {
-    AVFifoBuffer *buffer;
+    AVFifo *buffer;
     pthread_mutex_t buffer_lock;
     struct MHD_Connection *connection;
     int close_connection;
@@ -59,15 +59,15 @@ ssize_t helper_callback(void *cls, uint64_t pos, char *buf, size_t max)
 {
     struct ConnectionInfo *cinfo = (struct ConnectionInfo*) cls;
     pthread_mutex_lock(&cinfo->buffer_lock);
-    int buf_size = av_fifo_size(cinfo->buffer);
+    int buf_size = av_fifo_can_read(cinfo->buffer);
     if (buf_size > 0) {
         max = max > buf_size ? buf_size : max;
-        av_fifo_generic_read(cinfo->buffer, buf, max, NULL);
+        av_fifo_read(cinfo->buffer, buf, max);
     } else {
         max = 0;
     }
     if (max == 0 && cinfo->close_connection) {
-        av_fifo_free(cinfo->buffer);
+        av_fifo_freep2(&cinfo->buffer);
         pthread_mutex_unlock(&cinfo->buffer_lock);
         av_free(cinfo);
         return MHD_CONTENT_READER_END_OF_STREAM;
@@ -123,8 +123,8 @@ static enum MHD_Result answer_to_connection (void *cls, struct MHD_Connection *c
     // no locking needed, running on the same thread
 
     if (!strcmp("GET", method)) {
-        if (av_fifo_space(server->clients) > sizeof(struct HTTPClient*)) {
-            cinfo->buffer = av_fifo_alloc(INITIAL_BUFSIZE);
+        if (av_fifo_can_write(server->clients) > sizeof(struct HTTPClient*)) {
+            cinfo->buffer = av_fifo_alloc2(INITIAL_BUFSIZE, 1, 0);
             cinfo->connection = connection;
             cinfo->close_connection = 0;
 
@@ -134,7 +134,7 @@ static enum MHD_Result answer_to_connection (void *cls, struct MHD_Connection *c
             client->resource = av_strdup(url);
             client->method = av_strdup(method);
             client->httpd_data = cinfo;
-            av_fifo_generic_write(server->clients, &client, sizeof(struct HTTPClient*), NULL);
+            av_fifo_write(server->clients, &client, 1);
         }
         response = MHD_create_response_from_callback(MHD_SIZE_UNKNOWN,
                                                     1024,
@@ -166,7 +166,7 @@ int lmhttpd_init(void **server, struct HTTPDConfig config) {
         av_log(NULL, AV_LOG_ERROR, "Could not allocate MHDServer struct\n");
         return -1;
     }
-    server_p->clients = av_fifo_alloc_array(sizeof(struct HTTPClient), MAX_CLIENTS);
+    server_p->clients = av_fifo_alloc2(MAX_CLIENTS, sizeof(struct HTTPClient), 0);
     server_p->daemon = MHD_start_daemon (0, config.port, NULL, NULL,
                              &answer_to_connection, server_p, MHD_OPTION_CONNECTION_TIMEOUT, (unsigned int) 10, MHD_OPTION_END);
     if (!server_p->daemon || !server_p->clients) {
@@ -208,8 +208,8 @@ int lmhttpd_accept(void *server, struct HTTPClient **client, const char **valid_
     // run read and write operations
     if (MHD_run_from_select(s->daemon, &rs, &ws, &es) != MHD_YES)
         return HTTPD_OTHER_ERROR;
-    if(av_fifo_size(s->clients)) {
-        av_fifo_generic_read(s->clients, client, sizeof(struct HTTPClient*), NULL);
+    if(av_fifo_can_read(s->clients)) {
+        av_fifo_read(s->clients, client, 1);
 
         return 0;
     }
@@ -225,8 +225,8 @@ int lmhttpd_write(void *server, struct HTTPClient *client, const unsigned char *
     struct ConnectionInfo* cinfo = (struct ConnectionInfo*) client->httpd_data;
     int ret;
     pthread_mutex_lock(&cinfo->buffer_lock);
-    if (!cinfo->close_connection && av_fifo_space(cinfo->buffer) >= size) {
-        ret = av_fifo_generic_write(cinfo->buffer, (void*) buf, size, NULL);
+    if (!cinfo->close_connection && av_fifo_can_write(cinfo->buffer) >= size) {
+        ret = av_fifo_write(cinfo->buffer, (void*) buf, size);
 
     } else {
         ret = -1;
@@ -296,7 +296,7 @@ void lmhttpd_shutdown(void *server)
     }
 
     MHD_stop_daemon(mhd_server->daemon);
-    av_fifo_free(mhd_server->clients);
+    av_fifo_freep2(&mhd_server->clients);
     av_free(mhd_server);
 }
 
