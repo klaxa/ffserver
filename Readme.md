@@ -20,9 +20,9 @@ To successfully build the project the development files of the following project
 
 The versions building was tested on are:
 
- - ffmpeg 4.0 or newer
- - lua 5.3
- - libmicrohttpd 0.9.51
+ - ffmpeg 6.0 or newer
+ - lua 5.4
+ - libmicrohttpd 1.0.0
 
 
 After successfully building the project with ```make``` it can be used with a configuration file.
