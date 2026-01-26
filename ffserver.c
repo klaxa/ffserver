@@ -78,7 +78,7 @@ struct AcceptInfo {
 
 
 /** Map avio write callback to httpd write callback */
-int ffserver_write(void *opaque, unsigned char *buf, int buf_size)
+int ffserver_write(void *opaque, const uint8_t *buf, int buf_size)
 {
     struct FFServerInfo *info = (struct FFServerInfo*) opaque;
     return info->httpd->write(info->server, info->client, buf, buf_size);
