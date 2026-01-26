@@ -77,7 +77,7 @@ void segment_unref(struct Segment *seg)
     }
 }
 
-int segment_write(void *opaque, unsigned char *buf, int buf_size)
+int segment_write(void *opaque, const uint8_t *buf, int buf_size)
 {
     struct Segment *seg = (struct Segment*) opaque;
     seg->size += buf_size;

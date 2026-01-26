@@ -81,7 +81,7 @@ void segment_unref(struct Segment *seg);
  * @param buf_size number of bytes to write
  * @return number of bytes written. May be less than buf_size.
  */
-int segment_write(void *opaque, unsigned char *buf, int buf_size);
+int segment_write(void *opaque, const uint8_t *buf, int buf_size);
 
 /**
  * Read buf_size bytes from a Segment using a SegmentReadInfo struct and store them in buf.
